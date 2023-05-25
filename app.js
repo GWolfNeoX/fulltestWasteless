@@ -6,20 +6,20 @@ const bcrypt = require('bcryptjs');
 const { check, validationResult } = require('express-validator');
 const dotenv = require('dotenv');
 const Sequelize = require('sequelize');
-const cors = require('cors')
+const cors = require('cors');
 
 dotenv.config();
 
 const app = express();
 const port = process.env.PORT || 3000;
-app.use(cors())
+app.use(cors());
 
 // Konfigurasi Sequelize
 const sequelize = new Sequelize('railway', 'root', 'Gs8VmfdCJU8x6pv24vLi', {
-    host: 'containers-us-west-29.railway.app',
-    port: 7818,
-    dialect: 'mysql'
-  });
+  host: 'containers-us-west-29.railway.app',
+  port: 7818,
+  dialect: 'mysql'
+});
 
 // Model User
 const User = sequelize.define('user', {
@@ -53,10 +53,15 @@ const User = sequelize.define('user', {
     type: Sequelize.STRING,
     allowNull: false,
   },
+  phoneNumber: {
+    type: Sequelize.STRING,
+    allowNull: false,
+    unique: true,
+  },
 }, {
   timestamps: false, // Menghilangkan kolom createdAt dan updatedAt
 });
-  
+
 // Middleware
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(bodyParser.json());
@@ -85,106 +90,114 @@ const authenticate = (req, res, next) => {
 
 // Routes
 app.get('/homepage', authenticate, (req, res) => {
-    const name = req.session.user.name;
-    return res.send(`Selamat datang ${name}`);
-  });
- 
-  app.post('/register', [
-    check('name').notEmpty(),
-    check('gender').notEmpty(),
-    check('address').notEmpty(),
-    check('email').isEmail(),
-    check('password').isLength({ min: 6 }),
-  ], (req, res, next) => {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ errors: errors.array() });
+  const name = req.session.user.name;
+  return res.send(`Selamat datang ${name}`);
+});
+
+app.post('/register', [
+  check('name').notEmpty(),
+  check('gender').notEmpty(),
+  check('address').notEmpty(),
+  check('email').isEmail(),
+  check('password').isLength({ min: 6 }),
+  check('phoneNumber').notEmpty() // Validasi nomor telepon tidak boleh kosong
+], (req, res, next) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({ errors: errors.array() });
+  }
+
+  const { name, gender, address, email, password, phoneNumber } = req.body;
+
+  // Cek apakah email, nama, atau nomor telepon sudah digunakan sebelumnya
+  User.findOne({
+    where: {
+      [Sequelize.Op.or]: [
+        { email: email },
+        { name: name },
+        { phoneNumber: phoneNumber } // Periksa nomor telepon juga
+      ]
     }
-  
-    const { name, gender, address, email, password } = req.body;
-  
-    // Cek apakah email atau nama sudah digunakan sebelumnya
-    User.findOne({
-      where: {
-        [Sequelize.Op.or]: [
-          { email: email },
-          { name: name }
-        ]
-      }
-    })
-      .then((existingUser) => {
-        if (existingUser) {
-          // Jika email sudah digunakan
-          if (existingUser.email === email) {
-            return res.status(400).json({ error: 'Email sudah digunakan' });
-          }
-  
-          // Jika nama sudah digunakan
-          if (existingUser.name === name) {
-            return res.status(400).json({ error: 'Nama sudah dipakai' });
-          }
+  })
+    .then((existingUser) => {
+      if (existingUser) {
+        // Jika email sudah digunakan
+        if (existingUser.email === email) {
+          return res.status(400).json({ error: 'Email sudah digunakan' });
         }
-  
-        // Enkripsi password menggunakan bcrypt
-        bcrypt.genSalt(10, (err, salt) => {
-          bcrypt.hash(password, salt, (err, hash) => {
-            if (err) throw err;
-  
-            User.create({
-                name,
-                gender,
-                address,
-                email,
-                password: hash,
-              })
-                .then(() => res.status(201).json({ message: 'User created successfully' }))
-                .catch((err) => next(err));
-               // Menggunakan next(err) untuk menangani error
-          });
+
+        // Jika nama sudah digunakan
+        if (existingUser.name === name) {
+          return res.status(400).json({ error: 'Nama sudah dipakai' });
+        }
+
+        // Jika nomor telepon sudah digunakan
+        if (existingUser.phoneNumber === phoneNumber) {
+          return res.status(400).json({ error: 'Nomor telepon sudah digunakan' });
+        }
+      }
+
+      // Enkripsi password menggunakan bcrypt
+      bcrypt.genSalt(10, (err, salt) => {
+        bcrypt.hash(password, salt, (err, hash) => {
+          if (err) throw err;
+
+          User.create({
+              name,
+              gender,
+              address,
+              email,
+              phoneNumber, // Simpan nomor telepon dalam database
+              password: hash,
+            })
+              .then(() => res.status(201).json({ message: 'User created successfully' }))
+              .catch((err) => next(err));
+             // Menggunakan next(err) untuk menangani error
         });
-      })
-      .catch((err) => next(err)); // Menggunakan next(err) untuk menangani error
-  });
-  
-  // Middleware untuk menangani error
-  app.use((err, req, res, next) => {
-    console.error(err); // Cetak error ke konsol
-    res.status(500).json({ error: 'Terjadi kesalahan server' });
-  });
-  
+      });
+    })
+    .catch((err) => next(err)); // Menggunakan next(err) untuk menangani error
+});
+
+// Middleware untuk menangani error
+app.use((err, req, res, next) => {
+  console.error(err); // Cetak error ke konsol
+  res.status(500).json({ error: 'Terjadi kesalahan server' });
+});
+
 app.post('/login', [
-    // Validasi input saat login
-    check('email').isEmail(),
-    check('password').notEmpty(),
-  ], (req, res) => {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ errors: errors.array() });
-    }
-  
-    const { email, password } = req.body;
-  
-    User.findOne({ where: { email } })
-      .then((user) => {
-        if (!user) {
+  // Validasi input saat login
+  check('email').isEmail(),
+  check('password').notEmpty(),
+], (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({ errors: errors.array() });
+  }
+
+  const { email, password } = req.body;
+
+  User.findOne({ where: { email } })
+    .then((user) => {
+      if (!user) {
+        return res.status(401).json({ error: 'email/password kamu salah. Silahkan coba lagi.' });
+      }
+
+      bcrypt.compare(password, user.password, (err, isMatch) => {
+        if (err) throw err;
+
+        if (isMatch) {
+          // Set session untuk user yang berhasil login
+          req.session.user = user;
+          return res.json({ message: 'Login berhasil' });
+        } else {
           return res.status(401).json({ error: 'email/password kamu salah. Silahkan coba lagi.' });
         }
-  
-        bcrypt.compare(password, user.password, (err, isMatch) => {
-          if (err) throw err;
-  
-          if (isMatch) {
-            // Set session untuk user yang berhasil login
-            req.session.user = user;
-            return res.json({ message: 'Login berhasil' });
-          } else {
-            return res.status(401).json({ error: 'email/password kamu salah. Silahkan coba lagi.' });
-          }
-        });
-      })
-      .catch((err) => res.status(500).json({ error: err.message }));
-  });
-  
+      });
+    })
+    .catch((err) => res.status(500).json({ error: err.message }));
+});
+
 app.post('/logout', (req, res) => {
   req.session.destroy((err) => {
     if (err) {
