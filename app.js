@@ -7,6 +7,8 @@ const { check, validationResult } = require('express-validator');
 const dotenv = require('dotenv');
 const Sequelize = require('sequelize');
 const cors = require('cors');
+const { Storage } = require('@google-cloud/storage');
+const multer = require('multer');
 
 dotenv.config();
 
@@ -33,14 +35,6 @@ const User = sequelize.define('user', {
     type: Sequelize.STRING,
     allowNull: false,
   },
-  gender: {
-    type: Sequelize.STRING,
-    allowNull: false,
-  },
-  address: {
-    type: Sequelize.STRING,
-    allowNull: false,
-  },
   email: {
     type: Sequelize.STRING,
     allowNull: false,
@@ -52,11 +46,6 @@ const User = sequelize.define('user', {
   password: {
     type: Sequelize.STRING,
     allowNull: false,
-  },
-  phoneNumber: {
-    type: Sequelize.STRING,
-    allowNull: false,
-    unique: true,
   },
 }, {
   timestamps: false, // Menghilangkan kolom createdAt dan updatedAt
@@ -88,6 +77,18 @@ const authenticate = (req, res, next) => {
   }
 };
 
+// Konfigurasi Google Cloud Storage
+const storage = new Storage({
+  projectId: 'wasteless-387810',
+  keyFilename: './wasteless-credentials.json',
+});
+
+const bucketName = 'wasteless-test';
+
+// Konfigurasi multer
+const storageMulter = multer.memoryStorage();
+const upload = multer({ storage: storageMulter });
+
 // Routes
 app.get('/homepage', authenticate, (req, res) => {
   const name = req.session.user.name;
@@ -96,45 +97,26 @@ app.get('/homepage', authenticate, (req, res) => {
 
 app.post('/register', [
   check('name').notEmpty(),
-  check('gender').notEmpty(),
-  check('address').notEmpty(),
   check('email').isEmail(),
   check('password').isLength({ min: 6 }),
-  check('phoneNumber').notEmpty() // Validasi nomor telepon tidak boleh kosong
 ], (req, res, next) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
     return res.status(400).json({ errors: errors.array() });
   }
 
-  const { name, gender, address, email, password, phoneNumber } = req.body;
+  const { name, email, password } = req.body;
 
-  // Cek apakah email, nama, atau nomor telepon sudah digunakan sebelumnya
+  // Cek apakah email sudah digunakan sebelumnya
   User.findOne({
     where: {
-      [Sequelize.Op.or]: [
-        { email: email },
-        { name: name },
-        { phoneNumber: phoneNumber } // Periksa nomor telepon juga
-      ]
+      email: email,
     }
   })
     .then((existingUser) => {
       if (existingUser) {
         // Jika email sudah digunakan
-        if (existingUser.email === email) {
-          return res.status(400).json({ error: 'Email sudah digunakan' });
-        }
-
-        // Jika nama sudah digunakan
-        if (existingUser.name === name) {
-          return res.status(400).json({ error: 'Nama sudah dipakai' });
-        }
-
-        // Jika nomor telepon sudah digunakan
-        if (existingUser.phoneNumber === phoneNumber) {
-          return res.status(400).json({ error: 'Nomor telepon sudah digunakan' });
-        }
+        return res.status(400).json({ error: 'Email sudah digunakan' });
       }
 
       // Enkripsi password menggunakan bcrypt
@@ -144,10 +126,7 @@ app.post('/register', [
 
           User.create({
               name,
-              gender,
-              address,
               email,
-              phoneNumber, // Simpan nomor telepon dalam database
               password: hash,
             })
               .then(() => res.status(201).json({ message: 'User created successfully' }))
