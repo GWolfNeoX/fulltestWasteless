@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Upload Food</title>
+  <style>
+    #map {
+      height: 400px;
+      margin-bottom: 10px;
+    }
+  </style>
+  <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAdPe5yjUNFCnhBIYvuO5fLZyfSkyQa3_0&libraries=places"></script>
+  <script>
+    function initMap() {
+      const input = document.getElementById('location');
+      const autocomplete = new google.maps.places.Autocomplete(input);
+
+      // Check if user's device supports geolocation
+      if (navigator.geolocation) {
+        // Get the current position
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            const { latitude, longitude } = position.coords;
+            const currentPosition = new google.maps.LatLng(latitude, longitude);
+
+            // Set the map to the current position
+            const mapOptions = {
+              center: currentPosition,
+              zoom: 14,
+            };
+
+            const map = new google.maps.Map(document.getElementById('map'), mapOptions);
+
+            // Set a marker at the current position
+            new google.maps.Marker({
+              position: currentPosition,
+              map: map,
+            });
+
+            // Set the autocomplete bounds to the current position
+            autocomplete.setBounds(map.getBounds());
+          },
+          () => {
+            // Default position if geolocation is denied or not available
+            const defaultPosition = new google.maps.LatLng(-6.1754, 106.8272); // Jakarta Monas
+            const mapOptions = {
+              center: defaultPosition,
+              zoom: 14,
+            };
+
+            const map = new google.maps.Map(document.getElementById('map'), mapOptions);
+
+            // Set a marker at the default position
+            new google.maps.Marker({
+              position: defaultPosition,
+              map: map,
+            });
+
+            // Set the autocomplete bounds to the default position
+            autocomplete.setBounds(map.getBounds());
+          }
+        );
+      } else {
+        // Default position if geolocation is not supported
+        const defaultPosition = new google.maps.LatLng(-6.1754, 106.8272); // Jakarta Monas
+        const mapOptions = {
+          center: defaultPosition,
+          zoom: 14,
+        };
+
+        const map = new google.maps.Map(document.getElementById('map'), mapOptions);
+
+        // Set a marker at the default position
+        new google.maps.Marker({
+          position: defaultPosition,
+          map: map,
+        });
+
+        // Set the autocomplete bounds to the default position
+        autocomplete.setBounds(map.getBounds());
+      }
+    }
+  </script>
+</head>
+<body>
+  <h1>Upload Food</h1>
+  <form action="/postFood" method="POST" enctype="multipart/form-data">
+    <div>
+      <label for="foodName">Food Name:</label>
+      <input type="text" id="foodName" name="foodName" required>
+    </div>
+    <div>
+      <label for="description">Description:</label>
+      <textarea id="description" name="description" required></textarea>
+    </div>
+    <div>
+      <label for="quantity">Quantity:</label>
+      <input type="number" id="quantity" name="quantity" required>
+    </div>
+    <div>
+      <label for="location">Location:</label>
+      <input type="text" id="location" name="location" required>
+    </div>
+    <div>
+      <label for="expiredAt">Expiration Date:</label>
+      <input type="date" id="expiredAt" name="expiredAt" required>
+    </div>
+    <div>
+      <label for="fotoMakanan">Food Photo:</label>
+      <input type="file" id="fotoMakanan" name="fotoMakanan" required>
+    </div>
+    <button type="submit">Post Food</button>
+  </form>
+
+  <div id="map"></div>
+
+  <script>
+    // Initialize Google Maps Autocomplete
+    initMap();
+  </script>
+</body>
+</html>

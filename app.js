@@ -1,4 +1,9 @@
 const express = require('express');
+const multer = require('multer');
+const mysql = require('mysql');
+const { Storage } = require('@google-cloud/storage');
+const axios = require('axios');
+const { v4: uuidv4 } = require('uuid');
 const bodyParser = require('body-parser');
 const session = require('express-session');
 const flash = require('connect-flash');
@@ -7,8 +12,6 @@ const { check, validationResult } = require('express-validator');
 const dotenv = require('dotenv');
 const Sequelize = require('sequelize');
 const cors = require('cors');
-const { Storage } = require('@google-cloud/storage');
-const multer = require('multer');
 
 dotenv.config();
 
@@ -51,6 +54,50 @@ const User = sequelize.define('user', {
   timestamps: false, // Menghilangkan kolom createdAt dan updatedAt
 });
 
+// Model Food Donation
+const Food = sequelize.define('food', {
+  id: {
+    type: Sequelize.INTEGER,
+    autoIncrement: true,
+    primaryKey: true,
+    allowNull: false,
+  },
+  fotoMakanan: {
+    type: Sequelize.STRING,
+    allowNull: false,
+  },
+  foodName: {
+    type: Sequelize.STRING,
+    allowNull: false,
+  },
+  description: {
+    type: Sequelize.STRING,
+    allowNull: false,
+  },
+  quantity: {
+    type: Sequelize.INTEGER,
+    allowNull: false,
+  },
+  location: {
+    type: Sequelize.STRING,
+    allowNull: false,
+  },
+  latitude: {
+    type: Sequelize.FLOAT,
+    allowNull: false,
+  },
+  longitude: {
+    type: Sequelize.FLOAT,
+    allowNull: false,
+  },
+  expiredAt: {
+    type: Sequelize.DATE,
+    allowNull: false,
+  },
+}, {
+  timestamps: false, // Menghilangkan kolom createdAt dan updatedAt
+});
+
 // Middleware
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(bodyParser.json());
@@ -77,17 +124,31 @@ const authenticate = (req, res, next) => {
   }
 };
 
-// Konfigurasi Google Cloud Storage
-const storage = new Storage({
-  projectId: 'wasteless-387810',
-  keyFilename: './wasteless-credentials.json',
-});
-
-const bucketName = 'wasteless-test';
-
-// Konfigurasi multer
+// Configure multer storage and file filter
 const storageMulter = multer.memoryStorage();
 const upload = multer({ storage: storageMulter });
+
+// Konfigurasi Google Cloud Storage
+const storage = new Storage({
+  projectId: process.env.GCS_PROJECT_ID,
+  keyFilename: process.env.GCS_KEYFILE,
+});
+const bucketName = process.env.GCS_BUCKET_NAME;
+
+// Set the view engine to EJS
+app.set('view engine', 'ejs');
+
+// Middleware for parsing URL-encoded bodies
+app.use(express.urlencoded({ extended: true }));
+
+// Helper function to filter files by JPG extension
+function jpgFileFilter(req, file, cb) {
+  if (file.mimetype === 'image/jpeg') {
+    cb(null, true);
+  } else {
+    cb(new Error('Only JPG files are allowed'));
+  }
+}
 
 // Routes
 app.get('/homepage', authenticate, (req, res) => {
@@ -125,23 +186,17 @@ app.post('/register', [
           if (err) throw err;
 
           User.create({
-              name,
-              email,
-              password: hash,
-            })
-              .then(() => res.status(201).json({ message: 'User created successfully' }))
-              .catch((err) => next(err));
-             // Menggunakan next(err) untuk menangani error
+            name,
+            email,
+            password: hash,
+          })
+            .then(() => res.status(201).json({ message: 'User created successfully' }))
+            .catch((err) => next(err));
+          // Menggunakan next(err) untuk menangani error
         });
       });
     })
     .catch((err) => next(err)); // Menggunakan next(err) untuk menangani error
-});
-
-// Middleware untuk menangani error
-app.use((err, req, res, next) => {
-  console.error(err); // Cetak error ke konsol
-  res.status(500).json({ error: 'Terjadi kesalahan server' });
 });
 
 app.post('/login', [
@@ -186,6 +241,100 @@ app.post('/logout', (req, res) => {
   });
 });
 
+// Rute API '/postFood'
+app.post('/postFood', upload.single('fotoMakanan'), async (req, res, next) => {
+  try {
+    const { foodName, description, quantity, location, expiredAt } = req.body;
+    const file = req.file;
+
+    // Validasi input
+    const errors = [];
+    if (!foodName || !description || !quantity || !location || !expiredAt) {
+      errors.push({ msg: 'Semua field harus diisi' });
+    }
+
+    if (!file) {
+      errors.push({ msg: 'Foto makanan harus diupload' });
+    }
+
+    if (errors.length > 0) {
+      return res.status(400).json({ errors });
+    }
+
+    // Generate a random filename using UUID and add the .jpg extension
+    const filename = `${uuidv4()}.jpg`;
+
+    // Upload foto makanan ke Google Cloud Storage with the generated filename
+    const blob = storage.bucket(bucketName).file(`uploads/${filename}`); // Specify the "uploads" folder in the file path
+    const blobStream = blob.createWriteStream();
+
+    blobStream.on('error', (err) => {
+      next(err);
+    });
+
+    blobStream.on('finish', async () => {
+      try {
+        // Generate signed URL untuk foto makanan
+        const signedUrls = await blob.getSignedUrl({
+          action: 'read',
+          expires: '01-01-2025', // Tanggal expired URL
+        });
+
+        const fotoMakanan = signedUrls[0];
+
+        // Mendapatkan koordinat lokasi menggunakan Gmaps API
+        const gmapsApiKey = process.env.GMAPS_API_KEY;
+        const response = await axios.get(`https://maps.googleapis.com/maps/api/geocode/json?address=${location}&key=${gmapsApiKey}`);
+        const { results } = response.data;
+
+        if (results.length === 0) {
+          return res.status(400).json({ error: 'Lokasi tidak valid' });
+        }
+
+        const { formatted_address, geometry } = results[0];
+        const { lat, lng } = geometry.location;
+
+        // Upload berhasil, simpan alamat foto ke database
+        const publicUrl = `https://storage.googleapis.com/${bucketName}/${blob.name}`;
+
+        const sql = `INSERT INTO foods (fotoMakanan, foodName, description, quantity, location, latitude, longitude, expiredAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`;
+        connection.query(
+          sql,
+          [publicUrl, foodName, description, quantity, formatted_address, lat, lng, expiredAt],
+          (err) => {
+            if (err) {
+              next(err);
+            } else {
+              res.render('success');
+            }
+          }
+        );
+      } catch (error) {
+        next(error);
+      }
+    });
+
+    blobStream.end(file.buffer);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Middleware penanganan kesalahan
+app.use((err, req, res, next) => {
+  console.error('Error:', err);
+  res.status(500).json({ error: 'Internal Server Error' });
+});
+
 app.listen(port, () => {
   console.log(`Server is running on port http://localhost:${port}`);
 });
+
+// Helper function to filter files by JPG extension
+function jpgFileFilter(req, file, cb) {
+  if (file.mimetype === 'image/jpeg') {
+    cb(null, true);
+  } else {
+    cb(new Error('Only JPG files are allowed'));
+  }
+}
