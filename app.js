@@ -265,7 +265,7 @@ app.post('/postFood', upload.single('fotoMakanan'), async (req, res, next) => {
     const filename = `${uuidv4()}.jpg`;
 
     // Upload foto makanan ke Google Cloud Storage with the generated filename
-    const blob = storage.bucket(bucketName).file(`uploads/${filename}`); // Specify the "uploads" folder in the file path
+    const blob = storage.bucket(bucketName).file(`foodDonation/${filename}`); // Specify the "uploads" folder in the file path
     const blobStream = blob.createWriteStream();
 
     blobStream.on('error', (err) => {
