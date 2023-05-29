@@ -335,6 +335,23 @@ app.post('/postFood', upload.single('fotoMakanan'), async (req, res, next) => {
   }
 });
 
+//Rute API '/foodDetail'
+app.get('/foodDetail/:id', (req, res)=>{
+  const {foodId} = req.params.id;
+  
+  User.findOne({where:{id:foodId}})
+  .then(Food =>{
+    if(Food){
+      res.json(Food.toJSON());
+    } else {
+      res.status(404).json({error: 'Data makanan tidak ditemukan'});
+    }
+  })
+  .catch(err =>{
+    res.status(500).json({error: 'Internal server error'});
+  });
+});
+
 // Middleware penanganan kesalahan
 app.use((err, req, res, next) => {
   console.error('Error:', err);
