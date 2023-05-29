@@ -153,7 +153,12 @@ function jpgFileFilter(req, file, cb) {
 // Routes
 app.get('/homepage', authenticate, (req, res) => {
   const name = req.session.user.name;
-  return res.send(`Selamat datang ${name}`);
+  return res.render(`homepage`);
+});
+
+//Test Register
+app.get('/register', (req, res) => {
+  res.render('register');
 });
 
 app.post('/register', [
@@ -199,6 +204,11 @@ app.post('/register', [
     .catch((err) => next(err)); // Menggunakan next(err) untuk menangani error
 });
 
+//Test Login
+app.get('/login', (req, res) => {
+  res.render('login');
+});
+
 app.post('/login', [
   // Validasi input saat login
   check('email').isEmail(),
@@ -239,6 +249,11 @@ app.post('/logout', (req, res) => {
     }
     res.json({ message: 'Logout successful' });
   });
+});
+
+//Test postfood
+app.get('/postfood', (req, res) => {
+  res.render('index');
 });
 
 // Rute API '/postFood'
@@ -297,18 +312,18 @@ app.post('/postFood', upload.single('fotoMakanan'), async (req, res, next) => {
         // Upload berhasil, simpan alamat foto ke database
         const publicUrl = `https://storage.googleapis.com/${bucketName}/${blob.name}`;
 
-        const sql = `INSERT INTO foods (fotoMakanan, foodName, description, quantity, location, latitude, longitude, expiredAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`;
-        connection.query(
-          sql,
-          [publicUrl, foodName, description, quantity, formatted_address, lat, lng, expiredAt],
-          (err) => {
-            if (err) {
-              next(err);
-            } else {
-              res.render('success');
-            }
-          }
-        );
+        Food.create({
+          fotoMakanan: publicUrl,
+          foodName,
+          description,
+          quantity,
+          location: formatted_address,
+          latitude: lat,
+          longitude: lng,
+          expiredAt,
+        })
+          .then(() => res.render('success'))
+          .catch((err) => next(err));
       } catch (error) {
         next(error);
       }
@@ -323,18 +338,9 @@ app.post('/postFood', upload.single('fotoMakanan'), async (req, res, next) => {
 // Middleware penanganan kesalahan
 app.use((err, req, res, next) => {
   console.error('Error:', err);
-  res.status(500).json({ error: 'Internal Server Error' });
+  res.status(500).render('error');
 });
 
 app.listen(port, () => {
   console.log(`Server is running on port http://localhost:${port}`);
 });
-
-// Helper function to filter files by JPG extension
-function jpgFileFilter(req, file, cb) {
-  if (file.mimetype === 'image/jpeg') {
-    cb(null, true);
-  } else {
-    cb(new Error('Only JPG files are allowed'));
-  }
-}
