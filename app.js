@@ -20,9 +20,9 @@ const port = process.env.PORT || 3000;
 app.use(cors());
 
 // Konfigurasi Sequelize
-const sequelize = new Sequelize('railway', 'root', 'Gs8VmfdCJU8x6pv24vLi', {
-  host: 'containers-us-west-29.railway.app',
-  port: 7818,
+const sequelize = new Sequelize(process.env.DB_NAME, process.env.DB_USERNAME, process.env.DB_PASSWORD, {
+  host: process.env.DB_HOST,
+  port: process.env.DB_PORT,
   dialect: 'mysql'
 });
 
@@ -151,16 +151,18 @@ function jpgFileFilter(req, file, cb) {
 }
 
 // Routes
+// Halaman untuk Homepage
 app.get('/homepage', authenticate, (req, res) => {
   const name = req.session.user.name;
   return res.render(`homepage`);
 });
 
-//Test Register
+// Test Register
 app.get('/register', (req, res) => {
   res.render('register');
 });
 
+// Rute API untuk register '/register'
 app.post('/register', [
   check('name').notEmpty(),
   check('email').isEmail(),
@@ -204,11 +206,12 @@ app.post('/register', [
     .catch((err) => next(err)); // Menggunakan next(err) untuk menangani error
 });
 
-//Test Login
+// Test Login
 app.get('/login', (req, res) => {
   res.render('login');
 });
 
+// Rute API untuk Login '/login'
 app.post('/login', [
   // Validasi input saat login
   check('email').isEmail(),
@@ -242,6 +245,7 @@ app.post('/login', [
     .catch((err) => res.status(500).json({ error: err.message }));
 });
 
+// Rute API untuk Logout '/logout'
 app.post('/logout', (req, res) => {
   req.session.destroy((err) => {
     if (err) {
@@ -251,12 +255,12 @@ app.post('/logout', (req, res) => {
   });
 });
 
-//Test postfood
+// Test postfood
 app.get('/postfood', (req, res) => {
   res.render('index');
 });
 
-// Rute API '/postFood'
+// Rute API posting makanan '/postFood'
 app.post('/postFood', upload.single('fotoMakanan'), async (req, res, next) => {
   try {
     const { foodName, description, quantity, location, expiredAt } = req.body;
@@ -335,7 +339,7 @@ app.post('/postFood', upload.single('fotoMakanan'), async (req, res, next) => {
   }
 });
 
-//Rute API '/foodDetail'
+// Rute API melihat detail makanan yang tersedia '/foodDetail'
 app.get('/foodDetail/:id', (req, res)=>{
   const {foodId} = req.params.id;
   
