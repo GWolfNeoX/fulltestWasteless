@@ -340,10 +340,10 @@ app.post('/postFood', upload.single('fotoMakanan'), async (req, res, next) => {
 });
 
 // Rute API melihat detail makanan yang tersedia '/foodDetail'
-app.get('/foodDetail/:id', (req, res)=>{
-  const {foodId} = req.params.id;
+app.get('/fooddetail/:id', (req, res)=>{
+  const {id} = req.params;
   
-  User.findOne({where:{id:foodId}})
+  Food.findOne({where:{id:id}})
   .then(Food =>{
     if(Food){
       res.json(Food.toJSON());
