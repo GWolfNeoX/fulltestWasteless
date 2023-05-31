@@ -340,20 +340,20 @@ app.post('/postFood', upload.single('fotoMakanan'), async (req, res, next) => {
 });
 
 // Rute API melihat detail makanan yang tersedia '/foodDetail'
-app.get('/foodDetail/:id', (req, res)=>{
-  const {foodId} = req.params.id;
-  
-  User.findOne({where:{id:foodId}})
-  .then(Food =>{
-    if(Food){
-      res.json(Food.toJSON());
-    } else {
-      res.status(404).json({error: 'Data makanan tidak ditemukan'});
-    }
-  })
-  .catch(err =>{
-    res.status(500).json({error: 'Internal server error'});
-  });
+app.get('/foodDetail/:id', (req, res) => {
+  const foodId = req.params.id;
+
+  Food.findOne({ where: { id: foodId } })
+    .then((food) => {
+      if (food) {
+        res.json(food.toJSON());
+      } else {
+        res.status(404).json({ error: 'Data makanan tidak ditemukan' });
+      }
+    })
+    .catch((err) => {
+      res.status(500).json({ error: 'Internal server error' });
+    });
 });
 
 // Middleware penanganan kesalahan
