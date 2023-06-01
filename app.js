@@ -338,7 +338,23 @@ app.post('/postFood', authenticate, upload.single('fotoMakanan'), async (req, re
           longitude: lng,
           expiredAt,
         })
-          .then(() => res.render('success'))
+          .then(() => {
+            // Update historyDonation pengguna
+            const userId = req.session.user.id;
+            User.findByPk(userId)
+              .then((user) => {
+                if (user) {
+                  const currentHistory = user.historyDonation || ''; // Riwayat donasi saat ini
+                  const newHistory = `${currentHistory}\n${foodName} - ${new Date()}`; // Tambahkan donasi baru
+                  user.update({ historyDonation: newHistory })
+                    .then(() => {
+                      res.render('success');
+                    })
+                    .catch((err) => next(err));
+                }
+              })
+              .catch((err) => next(err));
+          })
           .catch((err) => next(err));
       } catch (error) {
         next(error);
@@ -351,7 +367,9 @@ app.post('/postFood', authenticate, upload.single('fotoMakanan'), async (req, re
   }
 });
 
-// Rute API melihat detail makanan yang tersedia '/foodDetail'
+// Rute API melihat makanan" yang tersedia
+
+// Rute API melihat detail makanan tertentu yang tersedia '/foodDetail'
 app.get('/foodDetail/:id', authenticate, (req, res) => {
   const foodId = req.params.id;
 
@@ -367,6 +385,8 @@ app.get('/foodDetail/:id', authenticate, (req, res) => {
       res.status(500).json({ error: 'Internal server error' });
     });
 });
+
+// Endpoint buat fitur search
 
 // Rute API melihat detail user profile '/userProfile'
 app.get('/userProfile', authenticate, (req, res) => {
@@ -385,8 +405,109 @@ app.get('/userProfile', authenticate, (req, res) => {
     });
 });
 
-// Rute API mengupdate data user
+// Rute API untuk Update User Profile
 
+
+// app.put('/userProfile', authenticate, upload.single('profileImage'), async (req, res, next) => {
+//   try {
+//     const { name, email, password, address } = req.body;
+//     const file = req.file;
+
+//     // Validasi input
+//     const errors = [];
+//     if (!name || !email || !password || !address) {
+//       errors.push({ msg: 'Semua field harus diisi' });
+//     }
+
+//     if (errors.length > 0) {
+//       return res.status(400).json({ errors });
+//     }
+
+//     const userId = req.session.user.id;
+
+//     // Cek apakah email sudah digunakan oleh pengguna lain
+//     User.findOne({
+//       where: {
+//         email: email,
+//         id: { [Sequelize.Op.not]: userId } // Memastikan email unik kecuali untuk pengguna saat ini
+//       }
+//     })
+//       .then((existingUser) => {
+//         if (existingUser) {
+//           // Jika email sudah digunakan
+//           return res.status(400).json({ error: 'Email sudah digunakan' });
+//         }
+
+//         // Update data pengguna
+//         User.findByPk(userId)
+//           .then((user) => {
+//             if (!user) {
+//               return res.status(404).json({ error: 'Pengguna tidak ditemukan' });
+//             }
+
+//             // Enkripsi password baru menggunakan bcrypt
+//             bcrypt.genSalt(10, (err, salt) => {
+//               bcrypt.hash(password, salt, (err, hash) => {
+//                 if (err) throw err;
+
+//                 user.name = name;
+//                 user.email = email;
+//                 user.password = hash;
+//                 user.address = address;
+
+//                 if (file) {
+//                   // Jika ada file foto profil, upload ke Google Cloud Storage dan simpan URL-nya
+//                   const filename = `${uuidv4()}.jpg`;
+//                   const blob = storage.bucket(bucketName).file(`profileImages/${filename}`);
+//                   const blobStream = blob.createWriteStream();
+
+//                   blobStream.on('error', (err) => {
+//                     next(err);
+//                   });
+
+//                   blobStream.on('finish', async () => {
+//                     try {
+//                       const signedUrls = await blob.getSignedUrl({
+//                         action: 'read',
+//                         expires: '01-01-2025',
+//                       });
+
+//                       const profileImage = signedUrls[0];
+//                       user.profileImage = profileImage;
+
+//                       user.save()
+//                         .then(() => {
+//                           // Merender halaman dengan menggunakan EJS
+//                           res.render('profile', { user, message: 'Data pengguna berhasil diperbarui' });
+//                         })
+//                         .catch((err) => next(err));
+//                     } catch (error) {
+//                       next(error);
+//                     }
+//                   });
+
+//                   blobStream.end(file.buffer);
+//                 } else {
+//                   // Jika tidak ada file foto profil, simpan data pengguna tanpa perubahan pada foto profil
+//                   user.save()
+//                     .then(() => {
+//                       // Merender halaman dengan menggunakan EJS
+//                       res.render('profile', { user, message: 'Data pengguna berhasil diperbarui' });
+//                     })
+//                     .catch((err) => next(err));
+//                 }
+//               });
+//             });
+//           })
+//           .catch((err) => next(err));
+//       })
+//       .catch((err) => next(err));
+//   } catch (error) {
+//     next(error);
+//   }
+// });
+
+// Rute endpoint untuk chat gatau gimana
 
 // Middleware penanganan kesalahan
 app.use((err, req, res, next) => {
