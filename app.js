@@ -368,6 +368,14 @@ app.post('/postFood', authenticate, upload.single('fotoMakanan'), async (req, re
 });
 
 // Rute API melihat makanan" yang tersedia
+app.get('/foodList',authenticate, (req, res) =>{
+  Food.findAll({
+    attributes: ['id','foodName','fotoMakanan','latitude','longitude']
+  })
+  .then((food)=>{
+    res.json(food);
+  })
+})
 
 // Rute API melihat detail makanan tertentu yang tersedia '/foodDetail'
 app.get('/foodDetail/:id', authenticate, (req, res) => {
