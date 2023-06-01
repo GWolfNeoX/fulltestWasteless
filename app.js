@@ -50,6 +50,18 @@ const User = sequelize.define('user', {
     type: Sequelize.STRING,
     allowNull: false,
   },
+  profileImage: {
+    type: Sequelize.STRING,
+    allowNull: true,
+  },
+  address: {
+    type: Sequelize.STRING,
+    allowNull: true,
+  },
+  historyDonation: {
+    type: Sequelize.STRING,
+    allowNull: true,
+  },
 }, {
   timestamps: false, // Menghilangkan kolom createdAt dan updatedAt
 });
@@ -256,12 +268,12 @@ app.post('/logout', (req, res) => {
 });
 
 // Test postfood
-app.get('/postfood', (req, res) => {
+app.get('/postfood', authenticate, (req, res) => {
   res.render('index');
 });
 
 // Rute API posting makanan '/postFood'
-app.post('/postFood', upload.single('fotoMakanan'), async (req, res, next) => {
+app.post('/postFood', authenticate, upload.single('fotoMakanan'), async (req, res, next) => {
   try {
     const { foodName, description, quantity, location, expiredAt } = req.body;
     const file = req.file;
@@ -340,7 +352,7 @@ app.post('/postFood', upload.single('fotoMakanan'), async (req, res, next) => {
 });
 
 // Rute API melihat detail makanan yang tersedia '/foodDetail'
-app.get('/foodDetail/:id', (req, res) => {
+app.get('/foodDetail/:id', authenticate, (req, res) => {
   const foodId = req.params.id;
 
   Food.findOne({ where: { id: foodId } })
@@ -355,6 +367,26 @@ app.get('/foodDetail/:id', (req, res) => {
       res.status(500).json({ error: 'Internal server error' });
     });
 });
+
+// Rute API melihat detail user profile '/userProfile'
+app.get('/userProfile', authenticate, (req, res) => {
+  const userId = req.session.user.id;
+
+  User.findOne({ where: { id: userId } })
+    .then((user) => {
+      if (user) {
+        res.json(user.toJSON());
+      } else {
+        res.status(404).json({ error: 'Data pengguna tidak ditemukan' });
+      }
+    })
+    .catch((err) => {
+      res.status(500).json({ error: 'Internal server error' });
+    });
+});
+
+// Rute API mengupdate data user
+
 
 // Middleware penanganan kesalahan
 app.use((err, req, res, next) => {
