@@ -396,6 +396,7 @@ app.get('/foodDetail/:id', authenticate, (req, res) => {
 
 // Endpoint buat fitur search
 
+
 // Rute API melihat detail user profile '/userProfile'
 app.get('/userProfile', authenticate, (req, res) => {
   const userId = req.session.user.id;
