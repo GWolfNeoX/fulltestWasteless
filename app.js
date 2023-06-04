@@ -123,7 +123,7 @@ app.use(session({
   resave: false,
   saveUninitialized: true,
   cookie: {
-    maxAge: 24 * 60 * 60 * 1000, // 1 hari dalam milidetik
+    maxAge: 24 * 60 * 60 * 1000, // 1 day in milliseconds
   },
 }));
 app.use(flash());
@@ -137,7 +137,7 @@ const authenticate = (req, res, next) => {
   if (req.session.user) {
     next();
   } else {
-    res.status(401).json({ error: 'Silahkan login/register terlebih dahulu' });
+    res.status(401).json({ error: 'Please login/register first' });
   }
 };
 
@@ -145,15 +145,12 @@ const authenticate = (req, res, next) => {
 const storageMulter = multer.memoryStorage();
 const upload = multer({ storage: storageMulter });
 
-// Konfigurasi Google Cloud Storage
+// Configure Google Cloud Storage
 const storage = new Storage({
   projectId: process.env.GCS_PROJECT_ID,
   keyFilename: process.env.GCS_KEYFILE,
 });
 const bucketName = process.env.GCS_BUCKET_NAME;
-
-// Set the view engine to EJS
-app.set('view engine', 'ejs');
 
 // Middleware for parsing URL-encoded bodies
 app.use(express.urlencoded({ extended: true }));
@@ -168,18 +165,13 @@ function jpgFileFilter(req, file, cb) {
 }
 
 // Routes
-// Halaman untuk Homepage
+// Homepage page
 app.get('/homepage', authenticate, (req, res) => {
   const name = req.session.user.name;
-  return res.json({ message: 'Homepage' });
+  res.json({ message: 'Homepage' });
 });
 
-// Test Register
-app.get('/register', (req, res) => {
-  res.render('register');
-});
-
-// Rute API untuk register '/register'
+// API route for register '/register'
 app.post('/register', [
   check('name').notEmpty(),
   check('email').isEmail(),
@@ -192,64 +184,59 @@ app.post('/register', [
 
   const { name, email, password } = req.body;
 
-  // Mengambil lokasi menggunakan Google Maps API
+  // Get location using Google Maps API
   const location = req.body.location;
-  const geocodeUrl = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(location)}&key=AIzaSyAdPe5yjUNFCnhBIYvuO5fLZyfSkyQa3_0`;
+  const gmapsApiKey = process.env.GMAPS_API_KEY;
+  const geocodeUrl = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(location)}&key=${gmapsApiKey}`;
 
   axios.get(geocodeUrl)
-  .then(response => {
-    const { results } = response.data;
-    if (results.length === 0) {
-      return res.status(400).json({ error: 'Lokasi tidak valid' });
-    }
-
-    const { lat, lng } = results[0].geometry.location;
-    const formattedLocation = results[0].formatted_address; // Tambahkan baris ini untuk mendapatkan alamat yang diformat dari API
-
-    // Cek apakah email sudah digunakan sebelumnya
-    User.findOne({
-      where: {
-        email: email,
+    .then(response => {
+      const { results } = response.data;
+      if (results.length === 0) {
+        return res.status(400).json({ error: 'Invalid location' });
       }
-    })
-      .then((existingUser) => {
-        if (existingUser) {
-          // Jika email sudah digunakan
-          return res.status(400).json({ error: 'Email sudah digunakan' });
+
+      const { lat, lng } = results[0].geometry.location;
+      const formattedLocation = results[0].formatted_address;
+
+      // Check if email is already used
+      User.findOne({
+        where: {
+          email: email,
         }
-
-        // Enkripsi password menggunakan bcrypt
-        bcrypt.genSalt(10, (err, salt) => {
-          bcrypt.hash(password, salt, (err, hash) => {
-            if (err) throw err;
-
-            User.create({
-              name,
-              email,
-              password: hash,
-              location: formattedLocation, // Ubah location menjadi formattedLocation
-              latitude: lat, // Tambahkan latitude
-              longitude: lng, // Tambahkan longitude
-            })
-              .then(() => res.status(201).json({ message: 'User created successfully' }))
-              .catch((err) => next(err));
-            // Menggunakan next(err) untuk menangani error
-          });
-        });
       })
-        .catch((err) => next(err)); // Menggunakan next(err) untuk menangani error
+        .then((existingUser) => {
+          if (existingUser) {
+            // If email is already used
+            return res.status(400).json({ error: 'Email is already used' });
+          }
+
+          // Encrypt password using bcrypt
+          bcrypt.genSalt(10, (err, salt) => {
+            bcrypt.hash(password, salt, (err, hash) => {
+              if (err) throw err;
+
+              User.create({
+                name,
+                email,
+                password: hash,
+                location: formattedLocation,
+                latitude: lat,
+                longitude: lng,
+              })
+                .then(() => res.status(201).json({ message: 'User created successfully' }))
+                .catch((err) => next(err));
+            });
+          });
+        })
+        .catch((err) => next(err));
     })
-    .catch((err) => next(err)); // Menggunakan next(err) untuk menangani error
+    .catch((err) => next(err));
 });
 
-// Test Login
-app.get('/login', (req, res) => {
-  res.render('login');
-});
-
-// Rute API untuk Login '/login'
+// API route for login '/login'
 app.post('/login', [
-  // Validasi input saat login
+  // Input validation for login
   check('email').isEmail(),
   check('password').notEmpty(),
 ], (req, res) => {
@@ -263,25 +250,25 @@ app.post('/login', [
   User.findOne({ where: { email } })
     .then((user) => {
       if (!user) {
-        return res.status(401).json({ error: 'email/password kamu salah. Silahkan coba lagi.' });
+        return res.status(401).json({ error: 'Invalid email/password. Please try again.' });
       }
 
       bcrypt.compare(password, user.password, (err, isMatch) => {
         if (err) throw err;
 
         if (isMatch) {
-          // Set session untuk user yang berhasil login
+          // Set session for the successfully logged in user
           req.session.user = user;
-          return res.json({ message: 'Login berhasil' });
+          return res.json({ message: 'Login successful' });
         } else {
-          return res.status(401).json({ error: 'email/password kamu salah. Silahkan coba lagi.' });
+          return res.status(401).json({ error: 'Invalid email/password. Please try again.' });
         }
       });
     })
     .catch((err) => res.status(500).json({ error: err.message }));
 });
 
-// Rute API untuk Logout '/logout'
+// API route for logout '/logout'
 app.post('/logout', (req, res) => {
   req.session.destroy((err) => {
     if (err) {
@@ -291,26 +278,21 @@ app.post('/logout', (req, res) => {
   });
 });
 
-// Test postfood
-app.get('/postfood', authenticate, (req, res) => {
-  res.render('index');
-});
-
-// Rute API posting makanan '/postFood'
+// API route for posting food '/postFood'
 app.post('/postFood', authenticate, upload.single('fotoMakanan'), async (req, res, next) => {
   try {
     const { foodName, description, quantity, location, expiredAt } = req.body;
     const expiredDateTime = moment(expiredAt).toDate();
     const file = req.file;
 
-    // Validasi input
+    // Input validation
     const errors = [];
     if (!foodName || !description || !quantity || !location || !expiredAt) {
-      errors.push({ msg: 'Semua field harus diisi' });
+      errors.push({ msg: 'All fields must be filled' });
     }
 
     if (!file) {
-      errors.push({ msg: 'Foto makanan harus diupload' });
+      errors.push({ msg: 'Food photo must be uploaded' });
     }
 
     if (errors.length > 0) {
@@ -320,7 +302,7 @@ app.post('/postFood', authenticate, upload.single('fotoMakanan'), async (req, re
     // Generate a random filename using UUID and add the .jpg extension
     const filename = `${uuidv4()}.jpg`;
 
-    // Upload foto makanan ke Google Cloud Storage with the generated filename
+    // Upload food photo to Google Cloud Storage with the generated filename
     const blob = storage.bucket(bucketName).file(`foodDonation/${filename}`); // Specify the "uploads" folder in the file path
     const blobStream = blob.createWriteStream();
 
@@ -330,27 +312,27 @@ app.post('/postFood', authenticate, upload.single('fotoMakanan'), async (req, re
 
     blobStream.on('finish', async () => {
       try {
-        // Generate signed URL untuk foto makanan
+        // Generate signed URL for the food photo
         const signedUrls = await blob.getSignedUrl({
           action: 'read',
-          expires: '01-01-2025', // Tanggal expired URL
+          expires: '01-01-2025', // Expiration date for the URL
         });
 
         const fotoMakanan = signedUrls[0];
 
-        // Mendapatkan koordinat lokasi menggunakan Gmaps API
+        // Get location coordinates using Gmaps API
         const gmapsApiKey = process.env.GMAPS_API_KEY;
         const response = await axios.get(`https://maps.googleapis.com/maps/api/geocode/json?address=${location}&key=${gmapsApiKey}`);
         const { results } = response.data;
 
         if (results.length === 0) {
-          return res.status(400).json({ error: 'Lokasi tidak valid' });
+          return res.status(400).json({ error: 'Invalid location' });
         }
 
         const { formatted_address, geometry } = results[0];
         const { lat, lng } = geometry.location;
 
-        // Upload berhasil, simpan alamat foto ke database
+        // Upload successful, save the photo URL to the database
         const publicUrl = `https://storage.googleapis.com/${bucketName}/${blob.name}`;
 
         Food.create({
@@ -364,16 +346,16 @@ app.post('/postFood', authenticate, upload.single('fotoMakanan'), async (req, re
           expiredAt: expiredDateTime,
         })
           .then(() => {
-            // Update historyDonation pengguna
+            // Update user's donation history
             const userId = req.session.user.id;
             User.findByPk(userId)
               .then((user) => {
                 if (user) {
-                  const currentHistory = user.historyDonation || ''; // Riwayat donasi saat ini
-                  const newHistory = `${currentHistory}\n${foodName} - ${new Date()}`; // Tambahkan donasi baru
+                  const currentHistory = user.historyDonation || ''; // Current donation history
+                  const newHistory = `${currentHistory}\n${foodName} - ${new Date()}`; // Add the new donation
                   user.update({ historyDonation: newHistory })
                     .then(() => {
-                      res.render('success');
+                      res.status(200).json({ message: 'Food donation posted successfully' });
                     })
                     .catch((err) => next(err));
                 }
@@ -392,8 +374,8 @@ app.post('/postFood', authenticate, upload.single('fotoMakanan'), async (req, re
   }
 });
 
-// Rute API melihat makanan" yang tersedia
-app.get('/foodList',authenticate, (req, res) =>{
+// API route for viewing available food list
+app.get('/foodList', authenticate, (req, res) =>{
   Food.findAll({
     attributes: ['id','foodName','fotoMakanan','latitude','longitude']
   })
@@ -402,7 +384,7 @@ app.get('/foodList',authenticate, (req, res) =>{
   })
 })
 
-// Rute API melihat detail makanan tertentu yang tersedia '/foodDetail'
+// API route for viewing details of a specific available food '/foodDetail'
 app.get('/foodDetail/:id', authenticate, (req, res) => {
   const foodId = req.params.id;
 
@@ -411,7 +393,7 @@ app.get('/foodDetail/:id', authenticate, (req, res) => {
       if (food) {
         res.json(food.toJSON());
       } else {
-        res.status(404).json({ error: 'Data makanan tidak ditemukan' });
+        res.status(404).json({ error: 'Food data not found' });
       }
     })
     .catch((err) => {
@@ -419,9 +401,9 @@ app.get('/foodDetail/:id', authenticate, (req, res) => {
     });
 });
 
-// Endpoint buat fitur search
+// Endpoint for search feature
 
-// Rute API melihat detail user profile '/userProfile'
+// API route for viewing user profile details '/userProfile'
 app.get('/userProfile', authenticate, (req, res) => {
   const userId = req.session.user.id;
 
@@ -430,7 +412,7 @@ app.get('/userProfile', authenticate, (req, res) => {
       if (user) {
         res.json(user.toJSON());
       } else {
-        res.status(404).json({ error: 'Data pengguna tidak ditemukan' });
+        res.status(404).json({ error: 'User data not found' });
       }
     })
     .catch((err) => {
@@ -438,16 +420,16 @@ app.get('/userProfile', authenticate, (req, res) => {
     });
 });
 
-// Rute endpoint untuk chat gatau gimana
+// Endpoint for chat feature
 
-// Middleware penanganan kesalahan
+// Error handling middleware
 app.use((err, req, res, next) => {
   console.error('Error:', err);
-  res.status(500).render('error');
+  res.status(500).json({ error: 'Internal server error' });
 });
 
 app.listen(port, () => {
-  console.log(`Server is running on port http://localhost:${port}`);
+  console.log(`Server is running on http://localhost:${port}`);
 });
 
 setInterval(() => {
@@ -466,4 +448,4 @@ setInterval(() => {
     .catch((err) => {
       console.error('Error deleting expired food items:', err);
     });
-}, 60 * 60 * 1000);
+}, 24 * 60 * 60 * 1000); // Run every 24 hours
