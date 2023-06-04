@@ -403,6 +403,7 @@ app.get('/foodDetail/:id', authenticate, (req, res) => {
 
 // Endpoint for search feature
 
+
 // API route for viewing user profile details '/userProfile'
 app.get('/userProfile', authenticate, (req, res) => {
   const userId = req.session.user.id;
@@ -421,6 +422,7 @@ app.get('/userProfile', authenticate, (req, res) => {
 });
 
 // Endpoint for chat feature
+
 
 // Error handling middleware
 app.use((err, req, res, next) => {
