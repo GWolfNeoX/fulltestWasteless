@@ -12,6 +12,7 @@ const { check, validationResult } = require('express-validator');
 const dotenv = require('dotenv');
 const Sequelize = require('sequelize');
 const cors = require('cors');
+const moment = require('moment');
 
 dotenv.config();
 
@@ -50,13 +51,17 @@ const User = sequelize.define('user', {
     type: Sequelize.STRING,
     allowNull: false,
   },
-  profileImage: {
+  location: {
     type: Sequelize.STRING,
-    allowNull: true,
+    allowNull: false,
   },
-  address: {
-    type: Sequelize.STRING,
-    allowNull: true,
+  latitude: {
+    type: Sequelize.FLOAT,
+    allowNull: false,
+  },
+  longitude: {
+    type: Sequelize.FLOAT,
+    allowNull: false,
   },
   historyDonation: {
     type: Sequelize.STRING,
@@ -166,7 +171,7 @@ function jpgFileFilter(req, file, cb) {
 // Halaman untuk Homepage
 app.get('/homepage', authenticate, (req, res) => {
   const name = req.session.user.name;
-  return res.render(`homepage`);
+  return res.json({ message: 'Homepage' });
 });
 
 // Test Register
@@ -187,33 +192,52 @@ app.post('/register', [
 
   const { name, email, password } = req.body;
 
-  // Cek apakah email sudah digunakan sebelumnya
-  User.findOne({
-    where: {
-      email: email,
+  // Mengambil lokasi menggunakan Google Maps API
+  const location = req.body.location;
+  const geocodeUrl = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(location)}&key=AIzaSyAdPe5yjUNFCnhBIYvuO5fLZyfSkyQa3_0`;
+
+  axios.get(geocodeUrl)
+  .then(response => {
+    const { results } = response.data;
+    if (results.length === 0) {
+      return res.status(400).json({ error: 'Lokasi tidak valid' });
     }
-  })
-    .then((existingUser) => {
-      if (existingUser) {
-        // Jika email sudah digunakan
-        return res.status(400).json({ error: 'Email sudah digunakan' });
+
+    const { lat, lng } = results[0].geometry.location;
+    const formattedLocation = results[0].formatted_address; // Tambahkan baris ini untuk mendapatkan alamat yang diformat dari API
+
+    // Cek apakah email sudah digunakan sebelumnya
+    User.findOne({
+      where: {
+        email: email,
       }
+    })
+      .then((existingUser) => {
+        if (existingUser) {
+          // Jika email sudah digunakan
+          return res.status(400).json({ error: 'Email sudah digunakan' });
+        }
 
-      // Enkripsi password menggunakan bcrypt
-      bcrypt.genSalt(10, (err, salt) => {
-        bcrypt.hash(password, salt, (err, hash) => {
-          if (err) throw err;
+        // Enkripsi password menggunakan bcrypt
+        bcrypt.genSalt(10, (err, salt) => {
+          bcrypt.hash(password, salt, (err, hash) => {
+            if (err) throw err;
 
-          User.create({
-            name,
-            email,
-            password: hash,
-          })
-            .then(() => res.status(201).json({ message: 'User created successfully' }))
-            .catch((err) => next(err));
-          // Menggunakan next(err) untuk menangani error
+            User.create({
+              name,
+              email,
+              password: hash,
+              location: formattedLocation, // Ubah location menjadi formattedLocation
+              latitude: lat, // Tambahkan latitude
+              longitude: lng, // Tambahkan longitude
+            })
+              .then(() => res.status(201).json({ message: 'User created successfully' }))
+              .catch((err) => next(err));
+            // Menggunakan next(err) untuk menangani error
+          });
         });
-      });
+      })
+        .catch((err) => next(err)); // Menggunakan next(err) untuk menangani error
     })
     .catch((err) => next(err)); // Menggunakan next(err) untuk menangani error
 });
@@ -276,6 +300,7 @@ app.get('/postfood', authenticate, (req, res) => {
 app.post('/postFood', authenticate, upload.single('fotoMakanan'), async (req, res, next) => {
   try {
     const { foodName, description, quantity, location, expiredAt } = req.body;
+    const expiredDateTime = moment(expiredAt).toDate();
     const file = req.file;
 
     // Validasi input
@@ -336,7 +361,7 @@ app.post('/postFood', authenticate, upload.single('fotoMakanan'), async (req, re
           location: formatted_address,
           latitude: lat,
           longitude: lng,
-          expiredAt,
+          expiredAt: expiredDateTime,
         })
           .then(() => {
             // Update historyDonation pengguna
@@ -396,7 +421,6 @@ app.get('/foodDetail/:id', authenticate, (req, res) => {
 
 // Endpoint buat fitur search
 
-
 // Rute API melihat detail user profile '/userProfile'
 app.get('/userProfile', authenticate, (req, res) => {
   const userId = req.session.user.id;
@@ -414,7 +438,6 @@ app.get('/userProfile', authenticate, (req, res) => {
     });
 });
 
-
 // Rute endpoint untuk chat gatau gimana
 
 // Middleware penanganan kesalahan
@@ -426,3 +449,21 @@ app.use((err, req, res, next) => {
 app.listen(port, () => {
   console.log(`Server is running on port http://localhost:${port}`);
 });
+
+setInterval(() => {
+  const currentTime = moment().toDate();
+
+  Food.destroy({
+    where: {
+      expiredAt: {
+        [Sequelize.Op.lt]: currentTime,
+      },
+    },
+  })
+    .then((deletedCount) => {
+      console.log(`Deleted ${deletedCount} expired food items`);
+    })
+    .catch((err) => {
+      console.error('Error deleting expired food items:', err);
+    });
+}, 60 * 60 * 1000);
