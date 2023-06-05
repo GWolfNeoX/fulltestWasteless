@@ -375,7 +375,7 @@ app.post('/postFood', authenticate, upload.single('fotoMakanan'), async (req, re
 });
 
 // API route for viewing available food list
-app.get('/foodList', authenticate, (req, res) =>{
+app.get('/foodList', (req, res) =>{
   Food.findAll({
     attributes: ['id','foodName','fotoMakanan','latitude','longitude']
   })
@@ -402,7 +402,21 @@ app.get('/foodDetail/:id', authenticate, (req, res) => {
 });
 
 // Endpoint for search feature
+app.get('/food/search', async (req, res) => {
+  const searchQuery = req.query.q;
 
+  Food.findAll({ where: { name: {[Sequelize.Op.like]: `%${searchQuery}%`}} })
+    .then((foods) => {
+      if (foods) {
+        res.json(foods.toJSON());
+      } else {
+        res.status(404).json({ error: 'Food data not found' });
+      }
+    })
+    .catch((err) => {
+      res.status(500).json({ error: 'Internal server error' });
+    });
+});
 
 // API route for viewing user profile details '/userProfile'
 app.get('/userProfile', authenticate, (req, res) => {
