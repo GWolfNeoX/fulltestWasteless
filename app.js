@@ -111,6 +111,10 @@ const Food = sequelize.define('food', {
     type: Sequelize.DATE,
     allowNull: false,
   },
+  foodType: {
+    type: Sequelize.STRING,
+    allowNull: false,
+  },
 }, {
   timestamps: false, // Menghilangkan kolom createdAt dan updatedAt
 });
@@ -281,13 +285,13 @@ app.post('/logout', (req, res) => {
 // API route for posting food '/postFood'
 app.post('/postFood', authenticate, upload.single('fotoMakanan'), async (req, res, next) => {
   try {
-    const { foodName, description, quantity, location, expiredAt } = req.body;
+    const { foodName, description, quantity, location, expiredAt, foodType } = req.body;
     const expiredDateTime = moment(expiredAt).toDate();
     const file = req.file;
 
     // Input validation
     const errors = [];
-    if (!foodName || !description || !quantity || !location || !expiredAt) {
+    if (!foodName || !description || !quantity || !location || !expiredAt || !foodType) {
       errors.push({ msg: 'All fields must be filled' });
     }
 
@@ -303,7 +307,7 @@ app.post('/postFood', authenticate, upload.single('fotoMakanan'), async (req, re
     const filename = `${uuidv4()}.jpg`;
 
     // Upload food photo to Google Cloud Storage with the generated filename
-    const blob = storage.bucket(bucketName).file(`foodDonation/${filename}`); // Specify the "uploads" folder in the file path
+    const blob = storage.bucket(bucketName).file(`foodDonation/${filename}`);
     const blobStream = blob.createWriteStream();
 
     blobStream.on('error', (err) => {
@@ -315,7 +319,7 @@ app.post('/postFood', authenticate, upload.single('fotoMakanan'), async (req, re
         // Generate signed URL for the food photo
         const signedUrls = await blob.getSignedUrl({
           action: 'read',
-          expires: '01-01-2025', // Expiration date for the URL
+          expires: '01-01-2025',
         });
 
         const fotoMakanan = signedUrls[0];
@@ -332,7 +336,7 @@ app.post('/postFood', authenticate, upload.single('fotoMakanan'), async (req, re
         const { formatted_address, geometry } = results[0];
         const { lat, lng } = geometry.location;
 
-        // Upload successful, save the photo URL to the database
+        // Upload successful, save the photo URL and food type to the database
         const publicUrl = `https://storage.googleapis.com/${bucketName}/${blob.name}`;
 
         Food.create({
@@ -344,6 +348,7 @@ app.post('/postFood', authenticate, upload.single('fotoMakanan'), async (req, re
           latitude: lat,
           longitude: lng,
           expiredAt: expiredDateTime,
+          foodType // Save the foodType in the database
         })
           .then(() => {
             // Update user's donation history
@@ -351,8 +356,8 @@ app.post('/postFood', authenticate, upload.single('fotoMakanan'), async (req, re
             User.findByPk(userId)
               .then((user) => {
                 if (user) {
-                  const currentHistory = user.historyDonation || ''; // Current donation history
-                  const newHistory = `${currentHistory}\n${foodName} - ${new Date()}`; // Add the new donation
+                  const currentHistory = user.historyDonation || '';
+                  const newHistory = `${currentHistory}\n${foodName} - ${new Date()}`;
                   user.update({ historyDonation: newHistory })
                     .then(() => {
                       res.status(200).json({ message: 'Food donation posted successfully' });
@@ -375,9 +380,9 @@ app.post('/postFood', authenticate, upload.single('fotoMakanan'), async (req, re
 });
 
 // API route for viewing available food list
-app.get('/foodList', (req, res) =>{
+app.get('/foodList', authenticate, (req, res) =>{
   Food.findAll({
-    attributes: ['id','foodName','fotoMakanan','latitude','longitude']
+    attributes: ['id','foodName','fotoMakanan','foodType','location']
   })
   .then((food)=>{
     res.json(food);
@@ -392,23 +397,6 @@ app.get('/foodDetail/:id', authenticate, (req, res) => {
     .then((food) => {
       if (food) {
         res.json(food.toJSON());
-      } else {
-        res.status(404).json({ error: 'Food data not found' });
-      }
-    })
-    .catch((err) => {
-      res.status(500).json({ error: 'Internal server error' });
-    });
-});
-
-// Endpoint for search feature
-app.get('/food/search', async (req, res) => {
-  const searchQuery = req.query.q;
-
-  Food.findAll({ where: { name: {[Sequelize.Op.like]: `%${searchQuery}%`}} })
-    .then((foods) => {
-      if (foods) {
-        res.json(foods.toJSON());
       } else {
         res.status(404).json({ error: 'Food data not found' });
       }
