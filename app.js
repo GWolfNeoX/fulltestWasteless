@@ -13,6 +13,9 @@ const dotenv = require('dotenv');
 const Sequelize = require('sequelize');
 const cors = require('cors');
 const moment = require('moment');
+const path = require('path');
+const tf = require('@tensorflow/tfjs');
+require('@tensorflow/tfjs-node'); // Masih error tidak bisa install depedancy
 
 dotenv.config();
 
@@ -144,6 +147,9 @@ const authenticate = (req, res, next) => {
     res.status(401).json({ error: 'Please login/register first' });
   }
 };
+
+// Folder untuk machine learning
+app.use('/machineLearning', express.static(path.join(__dirname, 'machineLearning')));
 
 // Configure multer storage and file filter
 const storageMulter = multer.memoryStorage();
@@ -421,6 +427,12 @@ app.get('/userProfile', authenticate, (req, res) => {
     .catch((err) => {
       res.status(500).json({ error: 'Internal server error' });
     });
+});
+
+// API route untuk memuat model ML
+app.get('/loadModel', (req, res) => {
+  const modelPath = path.join(__dirname, 'machineLearning', 'modelLabeledDatasetsV1.h5');
+  res.sendFile(modelPath);
 });
 
 // Error handling middleware

@@ -6,3 +6,6 @@ node_modules/
 
 #wasteless-credentials
 wasteless-credentials.json
+
+#modelML
+machineLearning/
