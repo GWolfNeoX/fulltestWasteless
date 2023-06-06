@@ -423,9 +423,6 @@ app.get('/userProfile', authenticate, (req, res) => {
     });
 });
 
-// Endpoint for chat feature
-
-
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error('Error:', err);
