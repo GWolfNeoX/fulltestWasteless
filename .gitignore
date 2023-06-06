@@ -1,8 +1,8 @@
-#modules
+#node_modules
 node_modules/
 
 #env
 .env
 
-#credentials
+#wasteless-credentials
 wasteless-credentials.json
