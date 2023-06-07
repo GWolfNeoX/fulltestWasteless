@@ -5,7 +5,6 @@ const { Storage } = require('@google-cloud/storage');
 const axios = require('axios');
 const { v4: uuidv4 } = require('uuid');
 const bodyParser = require('body-parser');
-const session = require('express-session');
 const flash = require('connect-flash');
 const bcrypt = require('bcryptjs');
 const { check, validationResult } = require('express-validator');
@@ -14,8 +13,7 @@ const Sequelize = require('sequelize');
 const cors = require('cors');
 const moment = require('moment');
 const path = require('path');
-const tf = require('@tensorflow/tfjs');
-require('@tensorflow/tfjs-node'); // Masih error tidak bisa install depedancy
+const jwt = require('jsonwebtoken');
 
 dotenv.config();
 
@@ -32,7 +30,7 @@ const sequelize = new Sequelize(process.env.DB_NAME, process.env.DB_USERNAME, pr
 
 // Model User
 const User = sequelize.define('user', {
-  id: {
+  id_user: {
     type: Sequelize.INTEGER,
     autoIncrement: true,
     primaryKey: true,
@@ -125,31 +123,7 @@ const Food = sequelize.define('food', {
 // Middleware
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(bodyParser.json());
-app.use(session({
-  secret: process.env.SESSION_SECRET,
-  resave: false,
-  saveUninitialized: true,
-  cookie: {
-    maxAge: 24 * 60 * 60 * 1000, // 1 day in milliseconds
-  },
-}));
 app.use(flash());
-
-app.use((req, res, next) => {
-  res.locals.user = req.session.user;
-  next();
-});
-
-const authenticate = (req, res, next) => {
-  if (req.session.user) {
-    next();
-  } else {
-    res.status(401).json({ error: 'Please login/register first' });
-  }
-};
-
-// Folder untuk machine learning
-app.use('/machineLearning', express.static(path.join(__dirname, 'machineLearning')));
 
 // Configure multer storage and file filter
 const storageMulter = multer.memoryStorage();
@@ -162,9 +136,6 @@ const storage = new Storage({
 });
 const bucketName = process.env.GCS_BUCKET_NAME;
 
-// Middleware for parsing URL-encoded bodies
-app.use(express.urlencoded({ extended: true }));
-
 // Helper function to filter files by JPG extension
 function jpgFileFilter(req, file, cb) {
   if (file.mimetype === 'image/jpeg') {
@@ -176,9 +147,9 @@ function jpgFileFilter(req, file, cb) {
 
 // Routes
 // Homepage page
-app.get('/homepage', authenticate, (req, res) => {
-  const name = req.session.user.name;
-  res.json({ message: 'Homepage' });
+app.get('/homepage', authenticateToken, (req, res) => {
+  const name = req.user.name;
+  res.json({ message: `Welcome, ${name}! This is the homepage.` });
 });
 
 // API route for register '/register'
@@ -255,7 +226,7 @@ app.post('/login', [
     return res.status(400).json({ errors: errors.array() });
   }
 
-  const { email, password } = req.body;
+  const { id_user, name, email, password, location } = req.body;
 
   User.findOne({ where: { email } })
     .then((user) => {
@@ -267,9 +238,10 @@ app.post('/login', [
         if (err) throw err;
 
         if (isMatch) {
-          // Set session for the successfully logged in user
-          req.session.user = user;
-          return res.json({ message: 'Login successful' });
+          // Generate JWT token
+          const token = generateToken(user);
+
+          res.json({ id_user, name, location, token });
         } else {
           return res.status(401).json({ error: 'Invalid email/password. Please try again.' });
         }
@@ -278,18 +250,8 @@ app.post('/login', [
     .catch((err) => res.status(500).json({ error: err.message }));
 });
 
-// API route for logout '/logout'
-app.post('/logout', (req, res) => {
-  req.session.destroy((err) => {
-    if (err) {
-      return res.status(500).json({ error: err.message });
-    }
-    res.json({ message: 'Logout successful' });
-  });
-});
-
 // API route for posting food '/postFood'
-app.post('/postFood', authenticate, upload.single('fotoMakanan'), async (req, res, next) => {
+app.post('/postFood', authenticateToken, upload.single('fotoMakanan'), async (req, res, next) => {
   try {
     const { foodName, description, quantity, location, expiredAt, foodType } = req.body;
     const expiredDateTime = moment(expiredAt).toDate();
@@ -358,7 +320,7 @@ app.post('/postFood', authenticate, upload.single('fotoMakanan'), async (req, re
         })
           .then(() => {
             // Update user's donation history
-            const userId = req.session.user.id;
+            const userId = req.user.id;
             User.findByPk(userId)
               .then((user) => {
                 if (user) {
@@ -386,17 +348,20 @@ app.post('/postFood', authenticate, upload.single('fotoMakanan'), async (req, re
 });
 
 // API route for viewing available food list
-app.get('/foodList', authenticate, (req, res) =>{
+app.get('/foodList', authenticateToken, (req, res) => {
   Food.findAll({
-    attributes: ['id','foodName','fotoMakanan','foodType','location']
+    attributes: ['id', 'foodName', 'description', 'quantity', 'expiredAt', 'fotoMakanan', 'location', 'latitude', 'longtitude', 'id_user', 'name_user']
   })
-  .then((food)=>{
-    res.json(food);
-  })
-})
+    .then((food) => {
+      res.json(food);
+    })
+    .catch((err) => {
+      res.status(500).json({ error: 'Internal server error' });
+    });
+});
 
 // API route for viewing details of a specific available food '/foodDetail'
-app.get('/foodDetail/:id', authenticate, (req, res) => {
+app.get('/foodDetail/:id', authenticateToken, (req, res) => {
   const foodId = req.params.id;
 
   Food.findOne({ where: { id: foodId } })
@@ -413,8 +378,8 @@ app.get('/foodDetail/:id', authenticate, (req, res) => {
 });
 
 // API route for viewing user profile details '/userProfile'
-app.get('/userProfile', authenticate, (req, res) => {
-  const userId = req.session.user.id;
+app.get('/userProfile', authenticateToken, (req, res) => {
+  const userId = req.user.id;
 
   User.findOne({ where: { id: userId } })
     .then((user) => {
@@ -429,11 +394,29 @@ app.get('/userProfile', authenticate, (req, res) => {
     });
 });
 
-// API route untuk memuat model ML
-app.get('/loadModel', (req, res) => {
-  const modelPath = path.join(__dirname, 'machineLearning', 'modelLabeledDatasetsV1.h5');
-  res.sendFile(modelPath);
-});
+// Middleware to authenticate the token
+function authenticateToken(req, res, next) {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (token == null) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, user) => {
+    if (err) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    req.user = user;
+    next();
+  });
+}
+
+// Generate JWT token
+function generateToken(user) {
+  return jwt.sign({ id: user.id, name: user.name, email: user.email }, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '1h' });
+}
 
 // Error handling middleware
 app.use((err, req, res, next) => {
