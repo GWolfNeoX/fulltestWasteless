@@ -350,7 +350,7 @@ app.post('/postFood', authenticateToken, upload.single('fotoMakanan'), async (re
 // API route for viewing available food list
 app.get('/foodList', authenticateToken, (req, res) => {
   Food.findAll({
-    attributes: ['foodId', 'foodName', 'description', 'quantity', 'expiredAt', 'fotoMakanan', 'location', 'latitude', 'longitude', 'userId', 'name']
+    attributes: ['foodId', 'foodName', 'description', 'quantity', 'expiredAt', 'fotoMakanan', 'location', 'latitude', 'longitude']
   })
     .then((food) => {
       res.json(food);
