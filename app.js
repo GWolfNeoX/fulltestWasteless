@@ -30,7 +30,7 @@ const sequelize = new Sequelize(process.env.DB_NAME, process.env.DB_USERNAME, pr
 
 // Model User
 const User = sequelize.define('user', {
-  id_user: {
+  userId: {
     type: Sequelize.INTEGER,
     autoIncrement: true,
     primaryKey: true,
@@ -74,7 +74,7 @@ const User = sequelize.define('user', {
 
 // Model Food Donation
 const Food = sequelize.define('food', {
-  id: {
+  foodId: {
     type: Sequelize.INTEGER,
     autoIncrement: true,
     primaryKey: true,
@@ -226,28 +226,28 @@ app.post('/login', [
     return res.status(400).json({ errors: errors.array() });
   }
 
-  const { id_user, name, email, password, location } = req.body;
+  const { userId, name, email, password, location } = req.body;
 
   User.findOne({ where: { email } })
-    .then((user) => {
-      if (!user) {
+  .then((user) => {
+    if (!user) {
+      return res.status(401).json({ error: 'Invalid email/password. Please try again.' });
+    }
+
+    bcrypt.compare(password, user.password, (err, isMatch) => {
+      if (err) throw err;
+
+      if (isMatch) {
+        // Generate JWT token
+        const token = generateToken(user);
+
+        res.json({ userId: user.userId, name, location, token });
+      } else {
         return res.status(401).json({ error: 'Invalid email/password. Please try again.' });
       }
-
-      bcrypt.compare(password, user.password, (err, isMatch) => {
-        if (err) throw err;
-
-        if (isMatch) {
-          // Generate JWT token
-          const token = generateToken(user);
-
-          res.json({ id_user, name, location, token });
-        } else {
-          return res.status(401).json({ error: 'Invalid email/password. Please try again.' });
-        }
-      });
-    })
-    .catch((err) => res.status(500).json({ error: err.message }));
+    });
+  })
+  .catch((err) => res.status(500).json({ error: err.message }));
 });
 
 // API route for posting food '/postFood'
@@ -320,7 +320,7 @@ app.post('/postFood', authenticateToken, upload.single('fotoMakanan'), async (re
         })
           .then(() => {
             // Update user's donation history
-            const userId = req.user.id;
+            const userId = req.user.userId;
             User.findByPk(userId)
               .then((user) => {
                 if (user) {
@@ -350,7 +350,7 @@ app.post('/postFood', authenticateToken, upload.single('fotoMakanan'), async (re
 // API route for viewing available food list
 app.get('/foodList', authenticateToken, (req, res) => {
   Food.findAll({
-    attributes: ['id', 'foodName', 'description', 'quantity', 'expiredAt', 'fotoMakanan', 'location', 'latitude', 'longtitude', 'id_user', 'name_user']
+    attributes: ['foodId', 'foodName', 'description', 'quantity', 'expiredAt', 'fotoMakanan', 'location', 'latitude', 'longitude', 'userId', 'name']
   })
     .then((food) => {
       res.json(food);
@@ -364,7 +364,7 @@ app.get('/foodList', authenticateToken, (req, res) => {
 app.get('/foodDetail/:id', authenticateToken, (req, res) => {
   const foodId = req.params.id;
 
-  Food.findOne({ where: { id: foodId } })
+  Food.findOne({ where: { foodId } })
     .then((food) => {
       if (food) {
         res.json(food.toJSON());
@@ -379,9 +379,9 @@ app.get('/foodDetail/:id', authenticateToken, (req, res) => {
 
 // API route for viewing user profile details '/userProfile'
 app.get('/userProfile', authenticateToken, (req, res) => {
-  const userId = req.user.id;
+  const userId = req.user.userId;
 
-  User.findOne({ where: { id: userId } })
+  User.findOne({ where: { userId } })
     .then((user) => {
       if (user) {
         res.json(user.toJSON());
@@ -415,7 +415,7 @@ function authenticateToken(req, res, next) {
 
 // Generate JWT token
 function generateToken(user) {
-  return jwt.sign({ id: user.id, name: user.name, email: user.email }, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '1h' });
+  return jwt.sign({ userId: user.userId, name: user.name, email: user.email }, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '1h' });
 }
 
 // Error handling middleware
