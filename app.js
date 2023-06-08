@@ -315,20 +315,25 @@ app.post('/postFood', authenticateToken, upload.single('fotoMakanan'), async (re
   }
 });
 
-// API route for viewing available food list
+// API route for viewing available food list '/foodList'
 app.get('/foodList', authenticateToken, (req, res) => {
   Food.findAll({
-    attributes: ['foodId', 'foodName', 'description', 'quantity', 'expiredAt', 'fotoMakanan', 'location', 'latitude', 'longitude', 'userId', 'name']
+    attributes: ['foodId', 'foodName', 'description', 'quantity', 'expiredAt', 'fotoMakanan', 'location', 'latitude', 'longitude']
   })
     .then((food) => {
-      res.json(food);
+      if (food.length === 0) {
+        res.status(200).json({ message: 'Tidak ada makanan yang didonasikan' });
+      } else {
+        res.json(food);
+      }
     })
     .catch((err) => {
+      console.error(err);
       res.status(500).json({ error: 'Internal server error' });
     });
 });
 
-// API route for viewing details of a specific available food '/foodDetail'
+// API route for viewing details of a specific available food '/foodDetail/:id'
 app.get('/foodDetail/:id', authenticateToken, (req, res) => {
   const foodId = req.params.id;
 
