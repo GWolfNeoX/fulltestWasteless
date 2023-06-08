@@ -52,18 +52,6 @@ const User = sequelize.define('user', {
     type: Sequelize.STRING,
     allowNull: false,
   },
-  location: {
-    type: Sequelize.STRING,
-    allowNull: false,
-  },
-  latitude: {
-    type: Sequelize.FLOAT,
-    allowNull: false,
-  },
-  longitude: {
-    type: Sequelize.FLOAT,
-    allowNull: false,
-  },
   historyDonation: {
     type: Sequelize.STRING,
     allowNull: true,
@@ -71,6 +59,7 @@ const User = sequelize.define('user', {
 }, {
   timestamps: false, // Menghilangkan kolom createdAt dan updatedAt
 });
+
 
 // Model Food Donation
 const Food = sequelize.define('food', {
@@ -165,52 +154,32 @@ app.post('/register', [
 
   const { name, email, password } = req.body;
 
-  // Get location using Google Maps API
-  const location = req.body.location;
-  const gmapsApiKey = process.env.GMAPS_API_KEY;
-  const geocodeUrl = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(location)}&key=${gmapsApiKey}`;
-
-  axios.get(geocodeUrl)
-    .then(response => {
-      const { results } = response.data;
-      if (results.length === 0) {
-        return res.status(400).json({ error: 'Invalid location' });
+  // Check if email is already used
+  User.findOne({
+    where: {
+      email: email,
+    }
+  })
+    .then((existingUser) => {
+      if (existingUser) {
+        // If email is already used
+        return res.status(400).json({ error: 'Email is already used' });
       }
 
-      const { lat, lng } = results[0].geometry.location;
-      const formattedLocation = results[0].formatted_address;
+      // Encrypt password using bcrypt
+      bcrypt.genSalt(10, (err, salt) => {
+        bcrypt.hash(password, salt, (err, hash) => {
+          if (err) throw err;
 
-      // Check if email is already used
-      User.findOne({
-        where: {
-          email: email,
-        }
-      })
-        .then((existingUser) => {
-          if (existingUser) {
-            // If email is already used
-            return res.status(400).json({ error: 'Email is already used' });
-          }
-
-          // Encrypt password using bcrypt
-          bcrypt.genSalt(10, (err, salt) => {
-            bcrypt.hash(password, salt, (err, hash) => {
-              if (err) throw err;
-
-              User.create({
-                name,
-                email,
-                password: hash,
-                location: formattedLocation,
-                latitude: lat,
-                longitude: lng,
-              })
-                .then(() => res.status(201).json({ message: 'User created successfully' }))
-                .catch((err) => next(err));
-            });
-          });
-        })
-        .catch((err) => next(err));
+          User.create({
+            name,
+            email,
+            password: hash,
+          })
+            .then(() => res.status(201).json({ message: 'User created successfully' }))
+            .catch((err) => next(err));
+        });
+      });
     })
     .catch((err) => next(err));
 });
