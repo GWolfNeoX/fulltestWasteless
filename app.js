@@ -194,28 +194,28 @@ app.post('/login', [
     return res.status(400).json({ errors: errors.array() });
   }
 
-  const { userId, name, email, password, location } = req.body;
+  const { name, email, password } = req.body;
 
   User.findOne({ where: { email } })
-  .then((user) => {
-    if (!user) {
-      return res.status(401).json({ error: 'Invalid email/password. Please try again.' });
-    }
-
-    bcrypt.compare(password, user.password, (err, isMatch) => {
-      if (err) throw err;
-
-      if (isMatch) {
-        // Generate JWT token
-        const token = generateToken(user);
-
-        res.json({ userId: user.userId, name, location, token });
-      } else {
+    .then((user) => {
+      if (!user) {
         return res.status(401).json({ error: 'Invalid email/password. Please try again.' });
       }
-    });
-  })
-  .catch((err) => res.status(500).json({ error: err.message }));
+
+      bcrypt.compare(password, user.password, (err, isMatch) => {
+        if (err) throw err;
+
+        if (isMatch) {
+          // Generate JWT token
+          const token = generateToken(user);
+
+          res.json({ userId: user.userId, name, email, token });
+        } else {
+          return res.status(401).json({ error: 'Invalid email/password. Please try again.' });
+        }
+      });
+    })
+    .catch((err) => res.status(500).json({ error: err.message }));
 });
 
 // API route for posting food '/postFood'
