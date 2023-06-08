@@ -60,7 +60,6 @@ const User = sequelize.define('user', {
   timestamps: false, // Menghilangkan kolom createdAt dan updatedAt
 });
 
-
 // Model Food Donation
 const Food = sequelize.define('food', {
   foodId: {
