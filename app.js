@@ -100,7 +100,7 @@ const Food = sequelize.define('food', {
     type: Sequelize.STRING,
     allowNull: true,
   },
-  longtitude: {
+  longitude: {
     type: Sequelize.STRING,
     allowNull: true,
   },
@@ -116,6 +116,33 @@ const Food = sequelize.define('food', {
   timestamps: false, // Menghilangkan kolom createdAt dan updatedAt
 });
 
+// Model History
+const History = sequelize.define('history', {
+  historyId: {
+    type: Sequelize.INTEGER,
+    autoIncrement: true,
+    primaryKey: true,
+    allowNull: false,
+  },
+  userId_peminat: {
+    type: Sequelize.INTEGER,
+    allowNull: false,
+  },
+  foodId: {
+    type: Sequelize.INTEGER,
+    allowNull: false,
+  },
+  userId_donatur: {
+    type: Sequelize.INTEGER,
+    allowNull: false,
+  },
+  status: {
+    type: Sequelize.BOOLEAN,
+    allowNull: false,
+  },
+}, {
+  timestamps: false, // Menghilangkan kolom createdAt dan updatedAt
+});
 
 
 // Middleware
@@ -304,7 +331,7 @@ app.post('/postFood', authenticateToken, upload.single('fotoMakanan'), async (re
           quantity,
           location,
           latitude: lat, 
-          longtitude: lng,
+          longitude: lng,
           expiredAt: expiredDateTime,
           foodType // Save the foodType in the database
         })
@@ -336,6 +363,45 @@ app.post('/postFood', authenticateToken, upload.single('fotoMakanan'), async (re
     next(error);
   }
 });
+
+
+// Get all history
+app.get('/history', authenticateToken, (req, res) => {
+  const userId = req.user.userId;
+
+  // Retrieve history data from the database
+  // You may need to modify the query based on your database schema
+  History.findAll({ where: { userId_peminat: userId } })
+    .then((history) => {
+      res.json(history);
+    })
+    .catch((err) => {
+      console.error(err);
+      res.status(500).json({ error: 'Internal server error' });
+    });
+});
+
+// Create history
+app.post('/history', authenticateToken, (req, res) => {
+  const { userId_peminat, foodId, userId_donatur, status } = req.body;
+
+  // Create a new history entry in the database
+  // You may need to modify the code based on your database schema
+  History.create({
+    userId_peminat,
+    foodId,
+    userId_donatur,
+    status
+  })
+    .then(() => {
+      res.status(201).json({ message: 'Berhasil request makanan' });
+    })
+    .catch((err) => {
+      console.error(err);
+      res.status(500).json({ error: 'Internal server error' });
+    });
+});
+
 
 // API route for viewing available food list '/foodList'
 app.get('/foodList', authenticateToken, (req, res) => {
