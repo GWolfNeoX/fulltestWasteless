@@ -1,6 +1,5 @@
 const express = require('express');
 const multer = require('multer');
-const mysql = require('mysql');
 const { Storage } = require('@google-cloud/storage');
 const axios = require('axios');
 const { v4: uuidv4 } = require('uuid');
@@ -112,6 +111,14 @@ const Food = sequelize.define('food', {
     type: Sequelize.STRING,
     allowNull: false,
   },
+  userId: {
+    type: Sequelize.INTEGER,
+    allowNull: true,
+  },
+  name: {
+    type: Sequelize.STRING,
+    allowNull: true,
+  },
 }, {
   timestamps: false, // Menghilangkan kolom createdAt dan updatedAt
 });
@@ -144,6 +151,9 @@ const History = sequelize.define('history', {
   timestamps: false, // Menghilangkan kolom createdAt dan updatedAt
 });
 
+// Konfigurasi Relasi
+Food.belongsTo(User, { foreignKey: 'userId' }); // Food memiliki relasi belongsTo dengan User
+User.hasMany(Food, { foreignKey: 'userId' }); // User memiliki relasi hasMany dengan Food
 
 // Middleware
 app.use(bodyParser.urlencoded({ extended: false }));
@@ -321,8 +331,20 @@ app.post('/postFood', authenticateToken, upload.single('fotoMakanan'), async (re
         const { geometry } = results[0];
         const { lat, lng } = geometry.location;
 
-        // Upload successful, save the photo URL and food type to the database
+        // Determine foodstatus based on quantity
+        let foodstatus;
+        if (quantity > 0) {
+          foodstatus = 'tersedia';
+        } else {
+          foodstatus = 'habis';
+        }
+
+        // Upload successful, save the photo URL, food type, and foodstatus to the database
         const publicUrl = `https://storage.googleapis.com/${bucketName}/${blob.name}`;
+
+        // Get userId and name from req.user
+        const userId = req.user.userId;
+        const name = req.user.name;
 
         Food.create({
           fotoMakanan: publicUrl,
@@ -330,10 +352,12 @@ app.post('/postFood', authenticateToken, upload.single('fotoMakanan'), async (re
           description,
           quantity,
           location,
-          latitude: lat, 
+          latitude: lat,
           longitude: lng,
           expiredAt: expiredDateTime,
-          foodType // Save the foodType in the database
+          foodType,
+          userId, // Save userId in the database
+          name, // Save name in the database
         })
           .then(() => {
             // Update user's donation history
@@ -370,7 +394,6 @@ app.get('/history', authenticateToken, (req, res) => {
   const userId = req.user.userId;
 
   // Retrieve history data from the database
-  // You may need to modify the query based on your database schema
   History.findAll({ where: { userId_peminat: userId } })
     .then((history) => {
       res.json(history);
@@ -386,7 +409,6 @@ app.post('/history', authenticateToken, (req, res) => {
   const { userId_peminat, foodId, userId_donatur, status } = req.body;
 
   // Create a new history entry in the database
-  // You may need to modify the code based on your database schema
   History.create({
     userId_peminat,
     foodId,
@@ -402,11 +424,10 @@ app.post('/history', authenticateToken, (req, res) => {
     });
 });
 
-
 // API route for viewing available food list '/foodList'
 app.get('/foodList', authenticateToken, (req, res) => {
   Food.findAll({
-    attributes: ['foodId', 'foodName', 'description', 'quantity', 'expiredAt', 'fotoMakanan', 'location']
+    attributes: ['foodId', 'fotoMakanan', 'foodName', 'description', 'quantity', 'location', 'latitude', 'longitude', 'expiredAt', 'foodType']
   })
     .then((food) => {
       if (food.length === 0) {
@@ -422,6 +443,21 @@ app.get('/foodList', authenticateToken, (req, res) => {
 });
 
 // API route for viewing details of a specific available food '/foodDetail/:id'
+app.get('/foodDetail/:id', authenticateToken, (req, res) => {
+  const foodId = req.params.id;
+
+  Food.findOne({ where: { foodId } })
+    .then((food) => {
+      if (food) {
+        res.json(food.toJSON());
+      } else {
+        res.status(404).json({ error: 'Food data not found' });
+      }
+    })
+    .catch((err) => {
+      res.status(500).json({ error: 'Internal server error' });
+    });
+});// API route for viewing details of a specific available food '/foodDetail/:id'
 app.get('/foodDetail/:id', authenticateToken, (req, res) => {
   const foodId = req.params.id;
 
@@ -453,6 +489,61 @@ app.get('/userProfile', authenticateToken, (req, res) => {
     .catch((err) => {
       res.status(500).json({ error: 'Internal server error' });
     });
+});
+
+// API route for updating user profile '/userProfile'
+app.put('/userProfile', authenticateToken, upload.single('fotoProfile'), async (req, res, next) => {
+  try {
+    const userId = req.user.userId;
+    const { location } = req.body;
+    const file = req.file;
+
+    // Input validation
+    if (!location) {
+      return res.status(400).json({ error: 'Location field must be filled' });
+    }
+
+    let fotoProfile = null;
+    if (file) {
+      // Generate a random filename using UUID and add the .jpg extension
+      const filename = `${uuidv4()}.jpg`;
+
+      // Upload profile photo to Google Cloud Storage with the generated filename
+      const blob = storage.bucket(bucketName).file(`profilePhotos/${filename}`);
+      const blobStream = blob.createWriteStream();
+
+      blobStream.on('error', (err) => {
+        next(err);
+      });
+
+      blobStream.on('finish', async () => {
+        try {
+          // Generate public URL for the profile photo
+          const publicUrl = `https://storage.googleapis.com/wasteless-buckets/profilePhotos/${filename}`;
+
+          // Update user's profile in the database
+          User.update({ location, fotoProfile: publicUrl }, { where: { userId } })
+            .then(() => {
+              res.status(200).json({ message: 'User profile updated successfully' });
+            })
+            .catch((err) => next(err));
+        } catch (error) {
+          next(error);
+        }
+      });
+
+      blobStream.end(file.buffer);
+    } else {
+      // Update user's profile in the database without changing the fotoProfile
+      User.update({ location }, { where: { userId } })
+        .then(() => {
+          res.status(200).json({ message: 'User profile updated successfully' });
+        })
+        .catch((err) => next(err));
+    }
+  } catch (error) {
+    next(error);
+  }
 });
 
 // Middleware to authenticate the token
