@@ -52,6 +52,14 @@ const User = sequelize.define('user', {
     type: Sequelize.STRING,
     allowNull: false,
   },
+  location: {
+    type: Sequelize.STRING,
+    allowNull: true,
+  },
+  fotoProfile: {
+    type: Sequelize.STRING,
+    allowNull: true,
+  },
   historyDonation: {
     type: Sequelize.STRING,
     allowNull: true,
@@ -89,12 +97,12 @@ const Food = sequelize.define('food', {
     allowNull: false,
   },
   latitude: {
-    type: Sequelize.FLOAT,
-    allowNull: false,
+    type: Sequelize.STRING,
+    allowNull: true,
   },
-  longitude: {
-    type: Sequelize.FLOAT,
-    allowNull: false,
+  longtitude: {
+    type: Sequelize.STRING,
+    allowNull: true,
   },
   expiredAt: {
     type: Sequelize.DATE,
@@ -107,6 +115,8 @@ const Food = sequelize.define('food', {
 }, {
   timestamps: false, // Menghilangkan kolom createdAt dan updatedAt
 });
+
+
 
 // Middleware
 app.use(bodyParser.urlencoded({ extended: false }));
@@ -222,7 +232,7 @@ app.post('/login', [
 app.post('/postFood', authenticateToken, upload.single('fotoMakanan'), async (req, res, next) => {
   try {
     const { foodName, description, quantity, location, expiredAt, foodType } = req.body;
-    const expiredDateTime = moment(expiredAt).toDate();
+    const expiredDateTime = moment(expiredAt, 'DD-MM-YYYY').toDate(); // Format tanggal menjadi dd-mm-yyyy
     const file = req.file;
 
     // Input validation
@@ -241,6 +251,18 @@ app.post('/postFood', authenticateToken, upload.single('fotoMakanan'), async (re
 
     // Generate a random filename using UUID and add the .jpg extension
     const filename = `${uuidv4()}.jpg`;
+
+    // Get location coordinates using Gmaps API
+    const gmapsApiKey = process.env.GMAPS_API_KEY;
+    const response = await axios.get(`https://maps.googleapis.com/maps/api/geocode/json?address=${location}&key=${gmapsApiKey}`);
+    const { results } = response.data;
+
+    if (results.length === 0) {
+      return res.status(400).json({ error: 'Invalid location' });
+    }
+
+    const { geometry } = results[0];
+    const { lat, lng } = geometry.location;
 
     // Upload food photo to Google Cloud Storage with the generated filename
     const blob = storage.bucket(bucketName).file(`foodDonation/${filename}`);
@@ -269,7 +291,7 @@ app.post('/postFood', authenticateToken, upload.single('fotoMakanan'), async (re
           return res.status(400).json({ error: 'Invalid location' });
         }
 
-        const { formatted_address, geometry } = results[0];
+        const { geometry } = results[0];
         const { lat, lng } = geometry.location;
 
         // Upload successful, save the photo URL and food type to the database
@@ -280,9 +302,9 @@ app.post('/postFood', authenticateToken, upload.single('fotoMakanan'), async (re
           foodName,
           description,
           quantity,
-          location: formatted_address,
-          latitude: lat,
-          longitude: lng,
+          location,
+          latitude: lat, 
+          longtitude: lng,
           expiredAt: expiredDateTime,
           foodType // Save the foodType in the database
         })
@@ -293,7 +315,7 @@ app.post('/postFood', authenticateToken, upload.single('fotoMakanan'), async (re
               .then((user) => {
                 if (user) {
                   const currentHistory = user.historyDonation || '';
-                  const newHistory = `${currentHistory}\n${foodName} - ${new Date()}`;
+                  const newHistory = `${currentHistory}\n${foodName} - ${moment().format('DD-MM-YYYY')}`; // Format tanggal saat ini menjadi dd-mm-yyyy
                   user.update({ historyDonation: newHistory })
                     .then(() => {
                       res.status(200).json({ message: 'Food donation posted successfully' });
@@ -318,7 +340,7 @@ app.post('/postFood', authenticateToken, upload.single('fotoMakanan'), async (re
 // API route for viewing available food list '/foodList'
 app.get('/foodList', authenticateToken, (req, res) => {
   Food.findAll({
-    attributes: ['foodId', 'foodName', 'description', 'quantity', 'expiredAt', 'fotoMakanan', 'location', 'latitude', 'longitude']
+    attributes: ['foodId', 'foodName', 'description', 'quantity', 'expiredAt', 'fotoMakanan', 'location']
   })
     .then((food) => {
       if (food.length === 0) {

@@ -5,7 +5,7 @@ node_modules/
 .env
 
 #wasteless-credentials
-wasteless-credentials.json
+wasteless-final-credentials.json
 
 #modelML
 machine_learning/
