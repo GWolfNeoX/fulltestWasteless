@@ -1,231 +1,428 @@
 # API Documentation
 
-This documentation provides an overview of the API endpoints and their functionalities for the project.
+This is the documentation for the API provided by the backend code you provided. The API is responsible for handling various operations related to user registration, login, posting food donations, viewing food lists, managing user profiles, and more. Below you will find details about the API endpoints, their functionality, and the expected request and response formats.
 
 ## Table of Contents
 - [Authentication](#authentication)
-  - [Register](#register)
-  - [Login](#login)
-- [User](#user)
-  - [Get User Profile](#get-user-profile)
-  - [Update User Profile](#update-user-profile)
-- [Food Donation](#food-donation)
-  - [Post Food Donation](#post-food-donation)
-  - [Get Available Food List](#get-available-food-list)
-  - [Get Food Details](#get-food-details)
-- [History](#history)
-  - [Get User History](#get-user-history)
-  - [Create History](#create-history)
-  - [Update History](#update-history)
+- [User Registration](#user-registration)
+- [User Login](#user-login)
+- [Posting Food Donations](#posting-food-donations)
+- [Viewing Food Lists](#viewing-food-lists)
+- [Viewing Food Details](#viewing-food-details)
+- [Viewing User Profile](#viewing-user-profile)
+- [Updating User Profile](#updating-user-profile)
+- [Viewing Donation History](#viewing-donation-history)
+- [Creating Donation History](#creating-donation-history)
+- [Updating Donation History](#updating-donation-history)
+
+---
 
 ## Authentication
 
-### Register
+The following endpoints require authentication using a JSON Web Token (JWT) in the Authorization header of the request:
 
-Create a new user account.
+- `/homepage` (GET)
+- `/postFood` (POST)
+- `/userProfile` (GET, PUT)
+- `/history` (GET, POST)
+- `/history/:id` (PUT)
+- `/foodList` (GET)
+- `/foodDetail/:id` (GET)
 
-- **URL**: `/register`
-- **Method**: `POST`
-- **Request Body**:
-  - `name` (required): Name of the user.
-  - `email` (required): Email address of the user.
-  - `password` (required): Password for the user account.
-- **Response**:
-  - `message`: Success message if the user is created successfully.
-- **Error Response**:
-  - Status: 400 Bad Request
-  - Content: JSON object with the `errors` field containing an array of validation errors.
+To authenticate, include the JWT token in the `Authorization` header of the request using the `Bearer` scheme:
 
-### Login
+```
+Authorization: Bearer <token>
+```
 
-Authenticate a user and obtain an access token.
+The JWT token is obtained by logging in (`/login` endpoint).
 
-- **URL**: `/login`
-- **Method**: `POST`
-- **Request Body**:
-  - `email` (required): Email address of the user.
-  - `password` (required): Password for the user account.
-- **Response**:
-  - `userId`: ID of the authenticated user.
-  - `name`: Name of the authenticated user.
-  - `email`: Email address of the authenticated user.
-  - `token`: JWT access token for authenticating subsequent requests.
-- **Error Response**:
-  - Status: 400 Bad Request
-  - Content: JSON object with the `errors` field containing an array of validation errors.
+---
 
-## User
+## User Registration
 
-### Get User Profile
+### Register a new user
 
-Retrieve the profile details of the authenticated user.
+Endpoint: `/register` (POST)
 
-- **URL**: `/userProfile`
-- **Method**: `GET`
-- **Request Headers**:
-  - `Authorization`: Bearer token obtained from the login.
-- **Response**:
-  - `userId`: ID of the user.
-  - `name`: Name of the user.
-  - `email`: Email address of the user.
-  - `location`: User's location.
-  - `fotoProfile`: URL of the user's profile photo.
-  - `historyDonation`: User's donation history.
+Register a new user by providing their name, email, and password in the request body. The email must be unique, and the password must be at least 6 characters long.
 
-### Update User Profile
+#### Request
 
-Update the profile details of the authenticated user.
-
-- **URL**: `/userProfile`
-- **Method**: `PUT`
-- **Request Headers**:
-  - `Authorization`: Bearer token obtained from the login.
-- **Request Body**:
-  - `location` (required): User's location.
-  - `fotoProfile`: Profile photo file to upload (multipart/form-data).
-- **Response**:
-  - `message`: Success message if the user profile is updated successfully.
-- **Error Response**:
-  - Status: 400 Bad Request
-  - Content: JSON object with the `error` field containing the error message.
-
-## Food Donation
-
-### Post Food Donation
-
-Create a new food donation entry.
-
-- **URL**: `/postFood`
-- **Method**: `POST`
-- **Request Headers**:
-  - `Authorization`: Bearer token obtained from the login.
-- **Request Body**:
-  - `foodName` (required): Name of the donated food.
-
-
-  - `description` (required): Description of the donated food.
-  - `quantity` (required): Quantity of the donated food.
-  - `location` (required): Location of the donated food.
-  - `expiredAt` (required): Expiration date of the donated food (DD-MM-YYYY format).
-  - `foodType` (required): Type of the donated food.
-  - `fotoMakanan` (required): Food photo file to upload (multipart/form-data).
-- **Response**:
-  - `message`: Success message if the food donation is posted successfully.
-- **Error Response**:
-  - Status: 400 Bad Request
-  - Content: JSON object with the `errors` field containing an array of validation errors.
-
-### Get Available Food List
-
-Retrieve the list of available food donations.
-
-- **URL**: `/foodList`
-- **Method**: `GET`
-- **Request Headers**:
-  - `Authorization`: Bearer token obtained from the login.
-- **Response**:
-  - Array of food donation objects with the following fields:
-    - `foodId`: ID of the food donation.
-    - `fotoMakanan`: URL of the food photo.
-    - `foodName`: Name of the donated food.
-    - `description`: Description of the donated food.
-    - `quantity`: Quantity of the donated food.
-    - `location`: Location of the donated food.
-    - `latitude`: Latitude coordinate of the donated food location.
-    - `longitude`: Longitude coordinate of the donated food location.
-    - `expiredAt`: Expiration date of the donated food.
-    - `foodType`: Type of the donated food.
-
-### Get Food Details
-
-Retrieve the details of a specific food donation.
-
-- **URL**: `/foodDetail/:id`
-- **Method**: `GET`
-- **Request Headers**:
-  - `Authorization`: Bearer token obtained from the login.
-- **URL Parameters**:
-  - `id`: ID of the food donation.
-- **Response**:
-  - Object with the following fields:
-    - `foodId`: ID of the food donation.
-    - `fotoMakanan`: URL of the food photo.
-    - `foodName`: Name of the donated food.
-    - `description`: Description of the donated food.
-    - `quantity`: Quantity of the donated food.
-    - `location`: Location of the donated food.
-    - `latitude`: Latitude coordinate of the donated food location.
-    - `longitude`: Longitude coordinate of the donated food location.
-    - `expiredAt`: Expiration date of the donated food.
-    - `foodType`: Type of the donated food.
-- **Error Response**:
-  - Status: 404 Not Found
-  - Content: JSON object with the `error` field containing the error message.
-
-## History
-
-### Get User History
-
-Retrieve the donation history of the authenticated user.
-
-- **URL**: `/history`
-- **Method**: `GET`
-- **Request Headers**:
-  - `Authorization`: Bearer token obtained from the login.
-- **Response**:
-  - Array of history objects with the following fields:
-    - `historyId`: ID of the history entry.
-    - `userId_peminat`: ID of the user who requested the food.
-    - `foodId`: ID of the donated food.
-    - `userId_donatur`: ID of the user who donated the food.
-    - `status`: Status of the history entry (true if the food has been distributed).
-
-### Create History
-
-Create a new history entry.
-
-- **URL**: `/history`
-- **Method**: `POST`
-- **Request Headers**:
-  - `Authorization`: Bearer token obtained from the login.
-- **Request Body**
-
-:
-  - `userId_peminat` (required): ID of the user who requested the food.
-  - `foodId` (required): ID of the donated food.
-  - `userId_donatur` (required): ID of the user who donated the food.
-  - `status` (required): Status of the history entry (true if the food has been distributed).
-- **Response**:
-  - `message`: Success message if the history entry is created successfully.
-- **Error Response**:
-  - Status: 500 Internal Server Error
-  - Content: JSON object with the `error` field containing the error message.
-
-### Update History
-
-Update the status of a history entry.
-
-- **URL**: `/history/:id`
-- **Method**: `PUT`
-- **Request Headers**:
-  - `Authorization`: Bearer token obtained from the login.
-- **URL Parameters**:
-  - `id`: ID of the history entry.
-- **Request Body**:
-  - `status` (required): Updated status of the history entry (true if the food has been distributed).
-- **Response**:
-  - `message`: Success message if the history entry is updated successfully.
-- **Error Response**:
-  - Status: 500 Internal Server Error
-  - Content: JSON object with the `error` field containing the error message.
-
-## Error Handling
-
-If an error occurs during the API requests, the server will respond with a JSON object containing the `error` field and an appropriate error message.
-
-Example Error Response:
 ```json
+POST /register
+Content-Type: application/json
+
 {
-  "error": "Internal server error"
+  "name": "John Doe",
+  "email": "john.doe@example.com",
+  "password": "password123"
 }
 ```
+
+#### Response
+
+```json
+HTTP/1.1 201 Created
+Content-Type: application/json
+
+{
+  "message": "User created successfully"
+}
+```
+
+---
+
+## User Login
+
+### Login with user credentials
+
+Endpoint: `/login` (POST)
+
+Authenticate a user by providing their email and password in the request body. Upon successful authentication, a JWT token will be returned.
+
+#### Request
+
+```json
+POST /login
+Content-Type: application/json
+
+{
+  "email": "john.doe@example.com",
+  "password": "password123"
+}
+```
+
+#### Response
+
+```json
+HTTP/1.1 200 OK
+Content-Type: application/json
+
+{
+  "userId": 1,
+  "name": "John Doe",
+  "email": "john.doe@example.com",
+  "token": "<jwt_token>"
+}
+```
+
+---
+
+## Posting Food Donations
+
+### Post a new food donation
+
+Endpoint: `/postFood` (POST)
+
+Post a new food donation by providing the required information in the request body. An image file of the food and additional details such as food name, description, quantity, location, expiration date, and food type are required.
+
+#### Request
+
+```json
+POST /postFood
+Content-Type: multipart/form-data
+Authorization: Bearer <jwt_token>
+
+{
+  "foodName": "Food Item",
+  "description": "This is a food item",
+  "quantity": 5,
+  "location": "Food Bank",
+  "expiredAt": "2023-06-30",
+  "foodType": "Vegetarian"
+
+
+}
+
+--file
+Content-Disposition: form-data; name="fotoMakanan"; filename="food_image.jpg"
+Content-Type: image/jpeg
+
+<binary_file_data>
+```
+
+#### Response
+
+```json
+HTTP/1.1 200 OK
+Content-Type: application/json
+
+{
+  "message": "Food donation posted successfully"
+}
+```
+
+---
+
+## Viewing Food Lists
+
+### Get a list of available food donations
+
+Endpoint: `/foodList` (GET)
+
+Retrieve a list of available food donations along with their details, such as food ID, food name, description, quantity, location, latitude, longitude, expiration date, and food type.
+
+#### Request
+
+```json
+GET /foodList
+Authorization: Bearer <jwt_token>
+```
+
+#### Response
+
+```json
+HTTP/1.1 200 OK
+Content-Type: application/json
+
+[
+  {
+    "foodId": 1,
+    "fotoMakanan": "<food_image_url>",
+    "foodName": "Food Item",
+    "description": "This is a food item",
+    "quantity": 5,
+    "location": "Food Bank",
+    "latitude": "123.456",
+    "longitude": "789.012",
+    "expiredAt": "2023-06-30",
+    "foodType": "Vegetarian"
+  },
+  {
+    "foodId": 2,
+    "fotoMakanan": "<food_image_url>",
+    "foodName": "Another Item",
+    "description": "This is another item",
+    "quantity": 3,
+    "location": "Food Pantry",
+    "latitude": "345.678",
+    "longitude": "901.234",
+    "expiredAt": "2023-07-15",
+    "foodType": "Non-vegetarian"
+  }
+]
+```
+
+---
+
+## Viewing Food Details
+
+### Get details of a specific food donation
+
+Endpoint: `/foodDetail/:id` (GET)
+
+Retrieve details of a specific food donation identified by its food ID.
+
+#### Request
+
+```json
+GET /foodDetail/1
+Authorization: Bearer <jwt_token>
+```
+
+#### Response
+
+```json
+HTTP/1.1 200 OK
+Content-Type: application/json
+
+{
+  "foodId": 1,
+  "fotoMakanan": "<food_image_url>",
+  "foodName": "Food Item",
+  "description": "This is a food item",
+  "quantity": 5,
+  "location": "Food Bank",
+  "latitude": "123.456",
+  "longitude": "789.012",
+  "expiredAt": "2023-06-30",
+  "foodType": "Vegetarian"
+}
+```
+
+---
+
+## Viewing User Profile
+
+### Get user profile details
+
+Endpoint: `/userProfile` (GET)
+
+Retrieve the profile details of the currently logged-in user.
+
+#### Request
+
+```json
+GET /userProfile
+Authorization: Bearer <jwt_token>
+```
+
+#### Response
+
+```json
+HTTP/1.1 200 OK
+Content-Type: application/json
+
+{
+  "userId": 1,
+  "name": "John Doe",
+  "email": "john.doe@example.com",
+  "location": "City",
+  "fotoProfile": "<profile_image_url>",
+  "historyDonation": "Food Item - 11-06-2023"
+}
+```
+
+---
+
+## Updating User Profile
+
+### Update user profile details
+
+Endpoint: `/userProfile` (PUT)
+
+Update the profile details of the currently logged-in user, including the location and profile photo.
+
+#### Request
+
+```json
+PUT /userProfile
+Content-Type: multipart/form-data
+Authorization: Bearer <jwt_token>
+
+{
+ 
+
+ "location": "New Location"
+}
+
+--file
+Content-Disposition: form-data; name="fotoProfile"; filename="profile_image.jpg"
+Content-Type: image/jpeg
+
+<binary_file_data>
+```
+
+#### Response
+
+```json
+HTTP/1.1 200 OK
+Content-Type: application/json
+
+{
+  "message": "User profile updated successfully"
+}
+```
+
+---
+
+## Viewing Donation History
+
+### Get the donation history of a user
+
+Endpoint: `/history` (GET)
+
+Retrieve the donation history of the currently logged-in user.
+
+#### Request
+
+```json
+GET /history
+Authorization: Bearer <jwt_token>
+```
+
+#### Response
+
+```json
+HTTP/1.1 200 OK
+Content-Type: application/json
+
+[
+  {
+    "historyId": 1,
+    "userId_peminat": 1,
+    "foodId": 1,
+    "userId_donatur": 2,
+    "status": true
+  },
+  {
+    "historyId": 2,
+    "userId_peminat": 1,
+    "foodId": 2,
+    "userId_donatur": 3,
+    "status": false
+  }
+]
+```
+
+---
+
+## Creating Donation History
+
+### Create a new donation history
+
+Endpoint: `/history` (POST)
+
+Create a new donation history entry by providing the user ID of the recipient, food ID, donor user ID, and donation status.
+
+#### Request
+
+```json
+POST /history
+Content-Type: application/json
+Authorization: Bearer <jwt_token>
+
+{
+  "userId_peminat": 1,
+  "foodId": 1,
+  "userId_donatur": 2,
+  "status": true
+}
+```
+
+#### Response
+
+```json
+HTTP/1.1 201 Created
+Content-Type: application/json
+
+{
+  "message": "Berhasil request makanan"
+}
+```
+
+---
+
+## Updating Donation History
+
+### Update the status of a donation history entry
+
+Endpoint: `/history/:id` (PUT)
+
+Update the status of a specific donation history entry identified by its history ID.
+
+#### Request
+
+```json
+PUT /history/1
+Content-Type: application/json
+Authorization: Bearer <jwt_token>
+
+{
+  "status": false
+}
+```
+
+#### Response
+
+```json
+HTTP/1.1 200 OK
+Content-Type: application/json
+
+{
+  "message": "Makanan telah dibagikan ke 1"
+}
+```
+
+---
