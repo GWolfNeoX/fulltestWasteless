@@ -424,6 +424,29 @@ app.post('/history', authenticateToken, (req, res) => {
     });
 });
 
+// Update history by ID
+app.put('/history/:id', authenticateToken, (req, res) => {
+  const historyId = req.params.id;
+  const { status } = req.body;
+
+  // Update the status of the history entry in the database
+  History.update({ status }, { where: { historyId } })
+    .then(() => {
+      // Retrieve the updated history entry
+      return History.findByPk(historyId);
+    })
+    .then((history) => {
+      const userId_peminat = history.userId_peminat;
+      res.json({
+        message: `Makanan telah dibagikan ke ${userId_peminat}`,
+      });
+    })
+    .catch((err) => {
+      console.error(err);
+      res.status(500).json({ error: 'Internal server error' });
+    });
+});
+
 // API route for viewing available food list '/foodList'
 app.get('/foodList', authenticateToken, (req, res) => {
   Food.findAll({
