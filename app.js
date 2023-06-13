@@ -12,6 +12,7 @@ const flash = require('connect-flash');
 const { v4: uuidv4 } = require('uuid');
 const bodyParser = require('body-parser');
 const { QueryTypes } = require('sequelize');
+const request = require('request');
 const { Storage } = require('@google-cloud/storage');
 const { check, validationResult } = require('express-validator');
 
@@ -498,80 +499,103 @@ app.get('/foodList/:userId', authenticateToken, (req, res) => {
 });
 
 // Endpoint for viewing available food list '/foodList'
-app.get('/foodList', authenticateToken, async (req, res) => {
+app.get('/preferancefoodList', authenticateToken, async (req, res) => {
   try {
     // Get User ID from authenticationToken
-    const userID = get_user_id_from_auth_token(authenticateToken);
+    const userId = get_user_id_from_auth_token(req.headers['authorization'].split(' ')[1]);
 
     // Get ML parameter
-    const foodTypes = await sequelize.query(
-      `SELECT f.foodType FROM history h
+    const [results] = await sequelize.query(
+      `SELECT f.foodType FROM histories h
        JOIN food f ON f.foodId = h.foodId
-       JOIN user u ON u.userId = h.userId_peminat
-       WHERE u.userId = :userID`,
+       JOIN users u ON u.userId = h.userId_peminat
+       WHERE u.userId = :userId`,
       {
-        replacements: { userID: userID },
+        replacements: { userId },
         type: QueryTypes.SELECT,
       }
     );
 
-    const parameterML = new Map();
-    parameterML.set("ayam_dagingT", 0);
-    parameterML.set("ikan_seafoodT", 0);
-    parameterML.set("tahu_tempe_telurT", 0);
-    parameterML.set("sayurT", 0);
-    parameterML.set("sambalT", 0);
-    parameterML.set("nasi_mie_pastaT", 0);
-    parameterML.set("sop_soto_baksoT", 0);
-    parameterML.set("kue_rotiT", 0);
-    parameterML.set("jajanan_pasarT", 0);
-    parameterML.set("puding_jeliT", 0);
-    parameterML.set("keripik_kerupukT", 0);
-    parameterML.set("buah_minumanT", 0);
+    const parameterML = {
+      ayam_dagingT: 0,
+      ikan_seafoodT: 0,
+      tahu_tempe_telurT: 0,
+      sayurT: 0,
+      sambalT: 0,
+      nasi_mie_pastaT: 0,
+      sop_soto_baksoT: 0,
+      kue_rotiT: 0,
+      jajanan_pasarT: 0,
+      puding_jeliT: 0,
+      keripik_kerupukT: 0,
+      buah_minumanT: 0,
+    };
 
-    for (const f of foodTypes) {
-      if (f.foodType === 'ayam_dagingT') {
-        parameterML.set("ayam_dagingT", parameterML.get("ayam_dagingT") + 1);
-      } else if (f.foodType === 'ikan_seafoodT') {
-        parameterML.set("ikan_seafoodT", parameterML.get("ikan_seafoodT") + 1);
-      } else if (f.foodType === 'tahu_tempe_telurT') {
-        parameterML.set("tahu_tempe_telurT", parameterML.get("tahu_tempe_telurT") + 1);
-      } else if (f.foodType === 'sayurT') {
-        parameterML.set("sayurT", parameterML.get("sayurT") + 1);
-      } else if (f.foodType === 'sambalT') {
-        parameterML.set("sambalT", parameterML.get("sambalT") + 1);
-      } else if (f.foodType === 'nasi_mie_pastaT') {
-        parameterML.set("nasi_mie_pastaT", parameterML.get("nasi_mie_pastaT") + 1);
-      } else if (f.foodType === 'sop_soto_baksoT') {
-        parameterML.set("sop_soto_baksoT", parameterML.get("sop_soto_baksoT") + 1);
-      } else if (f.foodType === 'kue_rotiT') {
-        parameterML.set("kue_rotiT", parameterML.get("kue_rotiT") + 1);
-      } else if (f.foodType === 'jajanan_pasarT') {
-        parameterML.set("jajanan_pasarT", parameterML.get("jajanan_pasarT") + 1);
-      } else if (f.foodType === 'puding_jeliT') {
-        parameterML.set("puding_jeliT", parameterML.get("puding_jeliT") + 1);
-      } else if (f.foodType === 'keripik_kerupukT') {
-        parameterML.set("keripik_kerupukT", parameterML.get("keripik_kerupukT") + 1);
-      } else if (f.foodType === 'buah_minumanT') {
-        parameterML.set("buah_minumanT", parameterML.get("buah_minumanT") + 1);
+    if (Array.isArray(results)) {
+      for (const result of results) {
+        parameterML[result.foodType] += 1;
       }
     }
 
     // API call ke API ML
-    const preferensi_user = await http.post('https://wasteless-api-v1-ywnxbyxnda-et.a.run.app/', parameterML); // Example
+    request.post(
+      'https://wasteless-ml-api-v1-ywnxbyxnda-et.a.run.app/',
+      { json: parameterML },
+      function (error, response, body) {
+        if (!error && response.statusCode == 200) {
+          const preferensi_user = body;
 
-    // Ambil seluruh makanan dari database
-    Food.findWhere({
-      foodType: preferensi_user
-    }).take(4);
+          // Ambil seluruh makanan dari database berdasarkan preferensi pengguna
+          Food.findAll({
+            where: {
+              foodType: preferensi_user,
+            },
+          })
+            .then((food) => {
+              if (food.length === 0) {
+                res.status(200).json({ message: 'Tidak ada makanan yang direkomendasikan untuk saat ini' });
+              } else {
+                // Ambil hanya preferensi makanan saja
+                const preferensiMakanan = food.map((item) => ({
+                  foodId: item.foodId,
+                  fotoMakanan: item.fotoMakanan,
+                  foodName: item.foodName,
+                  description: item.description,
+                  quantity: item.quantity,
+                  location: item.location,
+                  latitude: item.latitude,
+                  longitude: item.longitude,
+                  expiredAt: item.expiredAt,
+                  foodType: item.foodType,
+                }));
 
-    // Memunculkan semua makanan
-    Food.findAll({
-      attributes: ['foodId', 'fotoMakanan', 'foodName', 'description', 'quantity', 'location', 'latitude', 'longitude', 'expiredAt', 'foodType']
-    })
+                res.json(preferensiMakanan);
+              }
+            })
+            .catch((err) => {
+              console.error(err);
+              res.status(500).json({ error: 'Internal server error' });
+            });
+        } else {
+          console.error(error);
+          res.status(500).json({ error: 'Internal server error' });
+        }
+      }
+    );
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Endpoint for viewing all food list '/allFoodList'
+app.get('/allFoodList', authenticateToken, async (req, res) => {
+  try {
+    // Ambil semua makanan dari database
+    Food.findAll()
       .then((food) => {
         if (food.length === 0) {
-          res.status(200).json({ message: 'Tidak ada makanan yang didonasikan' });
+          res.status(200).json({ message: 'Tidak ada makanan yang sedang didonasikan' });
         } else {
           res.json(food);
         }
@@ -675,7 +699,6 @@ app.put('/userProfile', authenticateToken, upload.single('fotoProfile'), async (
     next(error);
   }
 });
-
 
 // Homepage page
 app.get('/homepage', authenticateToken, (req, res) => {
