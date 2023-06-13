@@ -1,428 +1,342 @@
-# API Documentation
+Berikut adalah dokumentasi API dari kode yang diberikan:
 
-This is the documentation for the API provided by the backend code you provided. The API is responsible for handling various operations related to user registration, login, posting food donations, viewing food lists, managing user profiles, and more. Below you will find details about the API endpoints, their functionality, and the expected request and response formats.
+## API Endpoint
 
-## Table of Contents
-- [Authentication](#authentication)
-- [User Registration](#user-registration)
-- [User Login](#user-login)
-- [Posting Food Donations](#posting-food-donations)
-- [Viewing Food Lists](#viewing-food-lists)
-- [Viewing Food Details](#viewing-food-details)
-- [Viewing User Profile](#viewing-user-profile)
-- [Updating User Profile](#updating-user-profile)
-- [Viewing Donation History](#viewing-donation-history)
-- [Creating Donation History](#creating-donation-history)
-- [Updating Donation History](#updating-donation-history)
+### Register User
 
----
+**Endpoint**: `/register`
 
-## Authentication
+**Method**: `POST`
 
-The following endpoints require authentication using a JSON Web Token (JWT) in the Authorization header of the request:
+**Request Body**:
+- `name` (string): Nama pengguna (wajib)
+- `email` (string): Alamat email pengguna (wajib, harus valid)
+- `password` (string): Kata sandi pengguna (wajib, minimal 6 karakter)
 
-- `/homepage` (GET)
-- `/postFood` (POST)
-- `/userProfile` (GET, PUT)
-- `/history` (GET, POST)
-- `/history/:id` (PUT)
-- `/foodList` (GET)
-- `/foodDetail/:id` (GET)
+**Response**:
+- Jika registrasi berhasil:
+  - `status code`: 201
+  - `body`: `{ message: 'User created successfully' }`
+- Jika registrasi gagal:
+  - `status code`: 400
+  - `body`: `{ errors: [ { msg: 'Error message' } ] }`
 
-To authenticate, include the JWT token in the `Authorization` header of the request using the `Bearer` scheme:
+### User Login
 
-```
-Authorization: Bearer <token>
-```
+**Endpoint**: `/login`
 
-The JWT token is obtained by logging in (`/login` endpoint).
+**Method**: `POST`
 
----
+**Request Body**:
+- `email` (string): Alamat email pengguna (wajib, harus valid)
+- `password` (string): Kata sandi pengguna (wajib)
 
-## User Registration
+**Response**:
+- Jika login berhasil:
+  - `status code`: 200
+  - `body`: `{ userId: user.userId, name, email, token }`
+    - `userId` (number): ID pengguna
+    - `name` (string): Nama pengguna
+    - `email` (string): Alamat email pengguna
+    - `token` (string): Token JWT untuk otentikasi
+- Jika login gagal:
+  - `status code`: 401
+  - `body`: `{ error: 'Invalid email/password. Please try again.' }`
 
-### Register a new user
+### Get User History
 
-Endpoint: `/register` (POST)
+**Endpoint**: `/history`
 
-Register a new user by providing their name, email, and password in the request body. The email must be unique, and the password must be at least 6 characters long.
+**Method**: `GET`
 
-#### Request
+**Request Header**:
+- `Authorization`: Token JWT (Bearer token)
 
-```json
-POST /register
-Content-Type: application/json
+**Response**:
+- Jika autentikasi berhasil:
+  - `status code`: 200
+  - `body`: `[ { historyId, userId_peminat, foodId, userId_donatur, status }, ... ]`
+    - `historyId` (number): ID riwayat
+    - `userId_peminat` (number): ID pengguna penerima
+    - `foodId` (number): ID makanan yang diambil
+    - `userId_donatur` (number): ID pengguna yang menyumbangkan makanan
+    - `status` (boolean): Status riwayat (true = selesai, false = belum selesai)
+- Jika autentikasi gagal:
+  - `status code`: 401
+  - `body`: `{ error: 'Unauthorized' }`
 
-{
-  "name": "John Doe",
-  "email": "john.doe@example.com",
-  "password": "password123"
-}
-```
+### Create History
 
-#### Response
+**Endpoint**: `/history`
 
-```json
-HTTP/1.1 201 Created
-Content-Type: application/json
+**Method**: `POST`
 
-{
-  "message": "User created successfully"
-}
-```
+**Request Header**:
+- `Authorization`: Token JWT (Bearer token)
 
----
+**Request Body**:
+- `userId_peminat` (number): ID pengguna penerima (wajib)
+- `foodId` (number): ID makanan yang diambil (wajib)
+- `userId_donatur` (number): ID pengguna yang menyumbangkan makanan (wajib)
+- `status` (boolean): Status riwayat (true = selesai, false = belum selesai) (wajib)
 
-## User Login
+**Response**:
+- Jika berhasil membuat riwayat:
+  - `status code`: 201
+  - `body`: `{ message: 'Berhasil request makanan' }`
+- Jika gagal membuat riwayat:
+  - `status code`: 500
+  - `body`: `{ error: 'Internal server error' }`
 
-### Login with user credentials
+### Update History
 
-Endpoint: `/login` (POST)
-
-Authenticate a user by providing their email and password in the request body. Upon successful authentication, a JWT token will be returned.
-
-#### Request
-
-```json
-POST /login
-Content-Type: application/json
-
-{
-  "email": "john.doe@example.com",
-  "password": "password123"
-}
-```
-
-#### Response
-
-```json
-HTTP/1.1 200 OK
-Content-Type: application/json
-
-{
-  "userId": 1,
-  "name": "John Doe",
-  "email": "john.doe@example.com",
-  "token": "<jwt_token>"
-}
-```
-
----
-
-## Posting Food Donations
-
-### Post a new food donation
-
-Endpoint: `/postFood` (POST)
-
-Post a new food donation by providing the required information in the request body. An image file of the food and additional details such as food name, description, quantity, location, expiration date, and food type are required.
-
-#### Request
-
-```json
-POST /postFood
-Content-Type: multipart/form-data
-Authorization: Bearer <jwt_token>
-
-{
-  "foodName": "Food Item",
-  "description": "This is a food item",
-  "quantity": 5,
-  "location": "Food Bank",
-  "expiredAt": "2023-06-30",
-  "foodType": "Vegetarian"
-
-
-}
-
---file
-Content-Disposition: form-data; name="fotoMakanan"; filename="food_image.jpg"
-Content-Type: image/jpeg
-
-<binary_file_data>
-```
-
-#### Response
-
-```json
-HTTP/1.1 200 OK
-Content-Type: application/json
-
-{
-  "message": "Food donation posted successfully"
-}
-```
-
----
-
-## Viewing Food Lists
-
-### Get a list of available food donations
-
-Endpoint: `/foodList` (GET)
-
-Retrieve a list of available food donations along with their details, such as food ID, food name, description, quantity, location, latitude, longitude, expiration date, and food type.
-
-#### Request
-
-```json
-GET /foodList
-Authorization: Bearer <jwt_token>
-```
-
-#### Response
-
-```json
-HTTP/1.1 200 OK
-Content-Type: application/json
-
-[
-  {
-    "foodId": 1,
-    "fotoMakanan": "<food_image_url>",
-    "foodName": "Food Item",
-    "description": "This is a food item",
-    "quantity": 5,
-    "location": "Food Bank",
-    "latitude": "123.456",
-    "longitude": "789.012",
-    "expiredAt": "2023-06-30",
-    "foodType": "Vegetarian"
-  },
-  {
-    "foodId": 2,
-    "fotoMakanan": "<food_image_url>",
-    "foodName": "Another Item",
-    "description": "This is another item",
-    "quantity": 3,
-    "location": "Food Pantry",
-    "latitude": "345.678",
-    "longitude": "901.234",
-    "expiredAt": "2023-07-15",
-    "foodType": "Non-vegetarian"
-  }
-]
-```
-
----
-
-## Viewing Food Details
-
-### Get details of a specific food donation
-
-Endpoint: `/foodDetail/:id` (GET)
-
-Retrieve details of a specific food donation identified by its food ID.
-
-#### Request
-
-```json
-GET /foodDetail/1
-Authorization: Bearer <jwt_token>
-```
-
-#### Response
-
-```json
-HTTP/1.1 200 OK
-Content-Type: application/json
-
-{
-  "foodId": 1,
-  "fotoMakanan": "<food_image_url>",
-  "foodName": "Food Item",
-  "description": "This is a food item",
-  "quantity": 5,
-  "location": "Food Bank",
-  "latitude": "123.456",
-  "longitude": "789.012",
-  "expiredAt": "2023-06-30",
-  "foodType": "Vegetarian"
-}
-```
-
----
-
-## Viewing User Profile
-
-### Get user profile details
-
-Endpoint: `/userProfile` (GET)
-
-Retrieve the profile details of the currently logged-in user.
-
-#### Request
-
-```json
-GET /userProfile
-Authorization: Bearer <jwt_token>
-```
-
-#### Response
-
-```json
-HTTP/1.1 200 OK
-Content-Type: application/json
-
-{
-  "userId": 1,
-  "name": "John Doe",
-  "email": "john.doe@example.com",
-  "location": "City",
-  "fotoProfile": "<profile_image_url>",
-  "historyDonation": "Food Item - 11-06-2023"
-}
-```
-
----
-
-## Updating User Profile
-
-### Update user profile details
-
-Endpoint: `/userProfile` (PUT)
-
-Update the profile details of the currently logged-in user, including the location and profile photo.
-
-#### Request
-
-```json
-PUT /userProfile
-Content-Type: multipart/form-data
-Authorization: Bearer <jwt_token>
-
-{
- 
-
- "location": "New Location"
-}
-
---file
-Content-Disposition: form-data; name="fotoProfile"; filename="profile_image.jpg"
-Content-Type: image/jpeg
-
-<binary_file_data>
-```
-
-#### Response
-
-```json
-HTTP/1.1 200 OK
-Content-Type: application/json
-
-{
-  "message": "User profile updated successfully"
-}
-```
-
----
-
-## Viewing Donation History
-
-### Get the donation history of a user
-
-Endpoint: `/history` (GET)
-
-Retrieve the donation history of the currently logged-in user.
-
-#### Request
-
-```json
-GET /history
-Authorization: Bearer <jwt_token>
-```
-
-#### Response
-
-```json
-HTTP/1.1 200 OK
-Content-Type: application/json
-
-[
-  {
-    "historyId": 1,
-    "userId_peminat": 1,
-    "foodId": 1,
-    "userId_donatur": 2,
-    "status": true
-  },
-  {
-    "historyId": 2,
-    "userId_peminat": 1,
-    "foodId": 2,
-    "userId_donatur": 3,
-    "status": false
-  }
-]
-```
-
----
-
-## Creating Donation History
-
-### Create a new donation history
-
-Endpoint: `/history` (POST)
-
-Create a new donation history entry by providing the user ID of the recipient, food ID, donor user ID, and donation status.
-
-#### Request
-
-```json
-POST /history
-Content-Type: application/json
-Authorization: Bearer <jwt_token>
-
-{
-  "userId_peminat": 1,
-  "foodId": 1,
-  "userId_donatur": 2,
-  "status": true
-}
-```
-
-#### Response
-
-```json
-HTTP/1.1 201 Created
-Content-Type: application/json
-
-{
-  "message": "Berhasil request makanan"
-}
-```
-
----
-
-## Updating Donation History
-
-### Update the status of a donation history entry
-
-Endpoint: `/history/:id` (PUT)
-
-Update the status of a specific donation history entry identified by its history ID.
-
-#### Request
-
-```json
-PUT /history/1
-Content-Type: application/json
-Authorization: Bearer <jwt_token>
-
-{
-  "status": false
-}
-```
-
-#### Response
-
-```json
-HTTP/1.1 200 OK
-Content-Type: application/json
-
-{
-  "message": "Makanan telah dibagikan ke 1"
-}
-```
-
----
+**Endpoint
+
+**: `/history/:id`
+
+**Method**: `PUT`
+
+**Request Header**:
+- `Authorization`: Token JWT (Bearer token)
+
+**Request Parameters**:
+- `id` (number): ID riwayat yang akan diperbarui (wajib)
+
+**Request Body**:
+- `status` (boolean): Status riwayat yang baru (true = selesai, false = belum selesai) (wajib)
+
+**Response**:
+- Jika berhasil memperbarui riwayat:
+  - `status code`: 200
+  - `body`: `{ message: 'Makanan telah dibagikan ke userId_peminat' }`
+- Jika gagal memperbarui riwayat:
+  - `status code`: 500
+  - `body`: `{ error: 'Internal server error' }`
+
+### Post Food Donation
+
+**Endpoint**: `/postFood`
+
+**Method**: `POST`
+
+**Request Header**:
+- `Authorization`: Token JWT (Bearer token)
+
+**Request Body**:
+- `foodName` (string): Nama makanan (wajib)
+- `description` (string): Deskripsi makanan (wajib)
+- `quantity` (number): Jumlah makanan (wajib)
+- `location` (string): Lokasi makanan (wajib)
+- `expiredAt` (string): Tanggal kadaluarsa makanan dalam format "DD-MM-YYYY" (wajib)
+- `foodType` (string): Jenis makanan (wajib)
+- `fotoMakanan` (file): Foto makanan (wajib)
+
+**Response**:
+- Jika berhasil menyumbangkan makanan:
+  - `status code`: 200
+  - `body`: `{ message: 'Food donation posted successfully' }`
+- Jika gagal menyumbangkan makanan:
+  - `status code`: 500
+  - `body`: `{ error: 'Internal server error' }`
+
+### Get Food List by User ID
+
+**Endpoint**: `/foodList/:userId`
+
+**Method**: `GET`
+
+**Request Header**:
+- `Authorization`: Token JWT (Bearer token)
+
+**Request Parameters**:
+- `userId` (number): ID pengguna yang ingin dilihat daftar makanannya (wajib)
+
+**Response**:
+- Jika berhasil mendapatkan daftar makanan:
+  - `status code`: 200
+  - `body`: `[ { foodId, name, expiredAt, fotoMakanan, userId }, ... ]`
+    - `foodId` (number): ID makanan
+    - `name` (string): Nama pengguna yang menyumbangkan makanan
+    - `expiredAt` (string): Tanggal kadaluarsa makanan dalam format "YYYY-MM-DD HH:mm:ss"
+    - `fotoMakanan` (string): URL foto makanan
+    - `userId` (number): ID pengguna yang menyumbangkan makanan
+- Jika tidak ada makanan yang didonasikan oleh pengguna:
+  - `status code`: 200
+  - `body`: `{ message: 'Tidak ada makanan yang didonasikan oleh pengguna ini' }`
+- Jika terjadi kesalahan server:
+  - `status code`: 500
+  - `body`: `{ error: 'Internal server error' }`
+
+### Get Preferred Food List
+
+**Endpoint**: `/preferancefoodList`
+
+**Method**: `GET`
+
+**Request Header**:
+- `Authorization`: Token JWT (Bearer token)
+
+**Response**:
+- J
+
+ika berhasil mendapatkan daftar makanan yang direkomendasikan:
+  - `status code`: 200
+  - `body`: `[ { foodId, fotoMakanan, foodName, description, quantity, location, latitude, longitude, expiredAt, foodType }, ... ]`
+    - `foodId` (number): ID makanan
+    - `fotoMakanan` (string): URL foto makanan
+    - `foodName` (string): Nama makanan
+    - `description` (string): Deskripsi makanan
+    - `quantity` (number): Jumlah makanan
+    - `location` (string): Lokasi makanan
+    - `latitude` (string): Koordinat lintang lokasi makanan
+    - `longitude` (string): Koordinat bujur lokasi makanan
+    - `expiredAt` (string): Tanggal kadaluarsa makanan dalam format "YYYY-MM-DD HH:mm:ss"
+    - `foodType` (string): Jenis makanan
+- Jika tidak ada makanan yang direkomendasikan:
+  - `status code`: 200
+  - `body`: `{ message: 'Tidak ada makanan yang direkomendasikan untuk saat ini' }`
+- Jika terjadi kesalahan server:
+  - `status code`: 500
+  - `body`: `{ error: 'Internal server error' }`
+
+### Get All Food List
+
+**Endpoint**: `/allFoodList`
+
+**Method**: `GET`
+
+**Request Header**:
+- `Authorization`: Token JWT (Bearer token)
+
+**Response**:
+- Jika berhasil mendapatkan semua daftar makanan:
+  - `status code`: 200
+  - `body`: `[ { foodId, fotoMakanan, foodName, description, quantity, location, latitude, longitude, expiredAt, foodType, userId, name }, ... ]`
+    - `foodId` (number): ID makanan
+    - `fotoMakanan` (string): URL foto makanan
+    - `foodName` (string): Nama makanan
+    - `description` (string): Deskripsi makanan
+    - `quantity` (number): Jumlah makanan
+    - `location` (string): Lokasi makanan
+    - `latitude` (string): Koordinat lintang lokasi makanan
+    - `longitude` (string): Koordinat bujur lokasi makanan
+    - `expiredAt` (string): Tanggal kadaluarsa makanan dalam format "YYYY-MM-DD HH:mm:ss"
+    - `foodType` (string): Jenis makanan
+    - `userId` (number): ID pengguna yang menyumbangkan makanan
+    - `name` (string): Nama pengguna yang menyumbangkan makanan
+- Jika tidak ada makanan yang sedang didonasikan:
+  - `status code`: 200
+  - `body`: `{ message: 'Tidak ada makanan yang sedang didonasikan' }`
+- Jika terjadi kesalahan server:
+  - `status code`: 500
+  - `body`: `{ error: 'Internal server error' }`
+
+### Get Food Detail
+
+**Endpoint**: `/foodDetail/:id`
+
+**Method**: `GET`
+
+**Request Header**:
+- `Authorization`: Token JWT (Bearer token)
+
+**Request Parameters**:
+- `id` (number): ID makanan yang ingin dilihat detailnya (wajib)
+
+
+
+**Response**:
+- Jika berhasil mendapatkan detail makanan:
+  - `status code`: 200
+  - `body`: `{ foodId, fotoMakanan, foodName, description, quantity, location, latitude, longitude, expiredAt, foodType, userId, name }`
+    - `foodId` (number): ID makanan
+    - `fotoMakanan` (string): URL foto makanan
+    - `foodName` (string): Nama makanan
+    - `description` (string): Deskripsi makanan
+    - `quantity` (number): Jumlah makanan
+    - `location` (string): Lokasi makanan
+    - `latitude` (string): Koordinat lintang lokasi makanan
+    - `longitude` (string): Koordinat bujur lokasi makanan
+    - `expiredAt` (string): Tanggal kadaluarsa makanan dalam format "YYYY-MM-DD HH:mm:ss"
+    - `foodType` (string): Jenis makanan
+    - `userId` (number): ID pengguna yang menyumbangkan makanan
+    - `name` (string): Nama pengguna yang menyumbangkan makanan
+- Jika data makanan tidak ditemukan:
+  - `status code`: 404
+  - `body`: `{ error: 'Food data not found' }`
+- Jika terjadi kesalahan server:
+  - `status code`: 500
+  - `body`: `{ error: 'Internal server error' }`
+
+### Get User Profile
+
+**Endpoint**: `/userProfile`
+
+**Method**: `GET`
+
+**Request Header**:
+- `Authorization`: Token JWT (Bearer token)
+
+**Response**:
+- Jika berhasil mendapatkan profil pengguna:
+  - `status code`: 200
+  - `body`: `{ userId, name, email, location, fotoProfile, historyDonation }`
+    - `userId` (number): ID pengguna
+    - `name` (string): Nama pengguna
+    - `email` (string): Alamat email pengguna
+    - `location` (string): Lokasi pengguna
+    - `fotoProfile` (string): URL foto profil pengguna
+    - `historyDonation` (string): Riwayat sumbangan pengguna
+- Jika data pengguna tidak ditemukan:
+  - `status code`: 404
+  - `body`: `{ error: 'User data not found' }`
+- Jika terjadi kesalahan server:
+  - `status code`: 500
+  - `body`: `{ error: 'Internal server error' }`
+
+### Update User Profile
+
+**Endpoint**: `/userProfile`
+
+**Method**: `PUT`
+
+**Request Header**:
+- `Authorization`: Token JWT (Bearer token)
+
+**Request Body**:
+- `location` (string): Lokasi pengguna yang baru (wajib)
+- `fotoProfile` (file): Foto profil pengguna (opsional)
+
+**Response**:
+- Jika berhasil memperbarui profil pengguna:
+  - `status code`: 200
+  - `body`: `{ message: 'User profile updated successfully' }`
+- Jika gagal memperbarui profil pengguna:
+  - `status code`: 500
+  - `body`: `{ error: 'Internal server error' }`
+
+### Home Page
+
+**Endpoint**: `/homepage`
+
+**Method**: `GET`
+
+**Request Header**:
+- `Authorization`: Token JWT (Bearer token)
+
+**Response**:
+- Jika autentikasi berhasil
+
+:
+  - `status code`: 200
+  - `body`: `{ message: 'Welcome, {name}! This is the homepage.' }`
+    - `{name}` adalah nama pengguna yang terautentikasi
+- Jika terjadi kesalahan server:
+  - `status code`: 500
+  - `body`: `{ error: 'Internal server error' }`
+
+### Error Handling
+
+- Jika terjadi kesalahan server pada endpoint manapun:
+  - `status code`: 500
+  - `body`: `{ error: 'Internal server error' }`
