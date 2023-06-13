@@ -1,19 +1,19 @@
-const express = require('express');
-const multer = require('multer');
-const { Storage } = require('@google-cloud/storage');
+const path = require('path');
+const cors = require('cors');
 const axios = require('axios');
+const multer = require('multer');
+const dotenv = require('dotenv');
+const moment = require('moment');
+const bcrypt = require('bcryptjs');
+const express = require('express');
+const jwt = require('jsonwebtoken');
+const Sequelize = require('sequelize');
+const flash = require('connect-flash');
 const { v4: uuidv4 } = require('uuid');
 const bodyParser = require('body-parser');
-const flash = require('connect-flash');
-const bcrypt = require('bcryptjs');
-const { check, validationResult } = require('express-validator');
-const dotenv = require('dotenv');
-const Sequelize = require('sequelize');
-const cors = require('cors');
-const moment = require('moment');
-const path = require('path');
 const { QueryTypes } = require('sequelize');
-const jwt = require('jsonwebtoken');
+const { Storage } = require('@google-cloud/storage');
+const { check, validationResult } = require('express-validator');
 
 dotenv.config();
 
@@ -172,23 +172,49 @@ const storage = new Storage({
 });
 const bucketName = process.env.GCS_BUCKET_NAME;
 
-// Helper function to filter files by JPG extension
-function jpgFileFilter(req, file, cb) {
-  if (file.mimetype === 'image/jpeg') {
-    cb(null, true);
-  } else {
-    cb(new Error('Only JPG files are allowed'));
+// Middleware to authenticate the token
+function authenticateToken(req, res, next) {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (token == null) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, user) => {
+    if (err) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    req.user = user;
+    next();
+  });
+}
+
+function get_user_id_from_auth_token(token) {
+  try {
+    // Ensure the token is provided as a string
+    if (typeof token !== 'string') {
+      throw new Error('Invalid token');
+    }
+
+    // Verify and decode the token to get the user ID
+    const decodedToken = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
+    return decodedToken.userId;
+  } catch (error) {
+    // Handle token verification error
+    console.error('Token verification error:', error);
+    return null;
   }
 }
 
-// Routes
-// Homepage page
-app.get('/homepage', authenticateToken, (req, res) => {
-  const name = req.user.name;
-  res.json({ message: `Welcome, ${name}! This is the homepage.` });
-});
+// Generate JWT token
+function generateToken(user) {
+  return jwt.sign({ userId: user.userId, name: user.name, email: user.email }, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '1h' });
+}
+// =============ENDPOINT===============
 
-// API route for register '/register'
+// Endpoint for register '/register'
 app.post('/register', [
   check('name').notEmpty(),
   check('email').isEmail(),
@@ -231,7 +257,7 @@ app.post('/register', [
     .catch((err) => next(err));
 });
 
-// API route for login '/login'
+// Endpoint for '/login'
 app.post('/login', [
   // Input validation for login
   check('email').isEmail(),
@@ -266,7 +292,66 @@ app.post('/login', [
     .catch((err) => res.status(500).json({ error: err.message }));
 });
 
-// API route for posting food '/postFood'
+// Endpoint for '/history'
+app.get('/history', authenticateToken, (req, res) => {
+  const userId = req.user.userId;
+
+  // Retrieve history data from the database
+  History.findAll({ where: { userId_peminat: userId } })
+    .then((history) => {
+      res.json(history);
+    })
+    .catch((err) => {
+      console.error(err);
+      res.status(500).json({ error: 'Internal server error' });
+    });
+});
+
+// Endpoint for Create history '/history' METHOD POST
+app.post('/history', authenticateToken, (req, res) => {
+  const { userId_peminat, foodId, userId_donatur, status } = req.body;
+
+  // Create a new history entry in the database
+  History.create({
+    userId_peminat,
+    foodId,
+    userId_donatur,
+    status
+  })
+    .then(() => {
+      res.status(201).json({ message: 'Berhasil request makanan' });
+    })
+    .catch((err) => {
+      console.error(err);
+      res.status(500).json({ error: 'Internal server error' });
+    });
+});
+
+// Endpoint for Update history '/history' METHOD PUT
+app.put('/history/:id', authenticateToken, (req, res) => {
+  const historyId = req.params.id;
+  const { status } = req.body;
+
+  // Update the status of the history entry in the database
+  History.update({ status }, { where: { historyId } })
+    .then(() => {
+      // Retrieve the updated history entry
+      return History.findByPk(historyId);
+    })
+    .then((history) => {
+      const userId_peminat = history.userId_peminat;
+      res.json({
+        message: `Makanan telah dibagikan ke ${userId_peminat}`,
+      });
+    })
+    .catch((err) => {
+      console.error(err);
+      res.status(500).json({ error: 'Internal server error' });
+    });
+});
+
+
+// Endpoint for posting food '/postFood'
 app.post('/postFood', authenticateToken, upload.single('fotoMakanan'), async (req, res, next) => {
   try {
     const { foodName, description, quantity, location, expiredAt, foodType } = req.body;
@@ -389,65 +474,7 @@ app.post('/postFood', authenticateToken, upload.single('fotoMakanan'), async (re
   }
 });
 
-// Get all history
-app.get('/history', authenticateToken, (req, res) => {
-  const userId = req.user.userId;
-
-  // Retrieve history data from the database
-  History.findAll({ where: { userId_peminat: userId } })
-    .then((history) => {
-      res.json(history);
-    })
-    .catch((err) => {
-      console.error(err);
-      res.status(500).json({ error: 'Internal server error' });
-    });
-});
-
-// Create history
-app.post('/history', authenticateToken, (req, res) => {
-  const { userId_peminat, foodId, userId_donatur, status } = req.body;
-
-  // Create a new history entry in the database
-  History.create({
-    userId_peminat,
-    foodId,
-    userId_donatur,
-    status
-  })
-    .then(() => {
-      res.status(201).json({ message: 'Berhasil request makanan' });
-    })
-    .catch((err) => {
-      console.error(err);
-      res.status(500).json({ error: 'Internal server error' });
-    });
-});
-
-// Update history by ID
-app.put('/history/:id', authenticateToken, (req, res) => {
-  const historyId = req.params.id;
-  const { status } = req.body;
-
-  // Update the status of the history entry in the database
-  History.update({ status }, { where: { historyId } })
-    .then(() => {
-      // Retrieve the updated history entry
-      return History.findByPk(historyId);
-    })
-    .then((history) => {
-      const userId_peminat = history.userId_peminat;
-      res.json({
-        message: `Makanan telah dibagikan ke ${userId_peminat}`,
-      });
-    })
-    .catch((err) => {
-      console.error(err);
-      res.status(500).json({ error: 'Internal server error' });
-    });
-});
-
-// API route for viewing food list by userId '/foodList/userId'
+// Endpoint for viewing food list by userId '/foodList/userId'
 app.get('/foodList/:userId', authenticateToken, (req, res) => {
   const userId = req.params.userId;
 
@@ -470,7 +497,7 @@ app.get('/foodList/:userId', authenticateToken, (req, res) => {
     });
 });
 
-// API route for viewing available food list '/foodList'
+// Endpoint for viewing available food list '/foodList'
 app.get('/foodList', authenticateToken, async (req, res) => {
   try {
     // Get User ID from authenticationToken
@@ -559,22 +586,7 @@ app.get('/foodList', authenticateToken, async (req, res) => {
   }
 });
 
-// API route for viewing details of a specific available food '/foodDetail/:id'
-app.get('/foodDetail/:id', authenticateToken, (req, res) => {
-  const foodId = req.params.id;
-
-  Food.findOne({ where: { foodId } })
-    .then((food) => {
-      if (food) {
-        res.json(food.toJSON());
-      } else {
-        res.status(404).json({ error: 'Food data not found' });
-      }
-    })
-    .catch((err) => {
-      res.status(500).json({ error: 'Internal server error' });
-    });
-});// API route for viewing details of a specific available food '/foodDetail/:id'
+// Endpoint for viewing details of a specific available food '/foodDetail/:id'
 app.get('/foodDetail/:id', authenticateToken, (req, res) => {
   const foodId = req.params.id;
 
@@ -591,7 +603,8 @@ app.get('/foodDetail/:id', authenticateToken, (req, res) => {
     });
 });
 
-// API route for viewing user profile details '/userProfile'
+
+// Endpoint for viewing user profile details '/userProfile'
 app.get('/userProfile', authenticateToken, (req, res) => {
   const userId = req.user.userId;
 
@@ -608,7 +621,7 @@ app.get('/userProfile', authenticateToken, (req, res) => {
     });
 });
 
-// API route for updating user profile '/userProfile'
+// Endpoint for updating user profile '/userProfile'
 app.put('/userProfile', authenticateToken, upload.single('fotoProfile'), async (req, res, next) => {
   try {
     const userId = req.user.userId;
@@ -663,46 +676,12 @@ app.put('/userProfile', authenticateToken, upload.single('fotoProfile'), async (
   }
 });
 
-// Middleware to authenticate the token
-function authenticateToken(req, res, next) {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
 
-  if (token == null) {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
-
-  jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, user) => {
-    if (err) {
-      return res.status(403).json({ error: 'Forbidden' });
-    }
-
-    req.user = user;
-    next();
-  });
-}
-
-function get_user_id_from_auth_token(token) {
-  try {
-    // Ensure the token is provided as a string
-    if (typeof token !== 'string') {
-      throw new Error('Invalid token');
-    }
-
-    // Verify and decode the token to get the user ID
-    const decodedToken = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
-    return decodedToken.userId;
-  } catch (error) {
-    // Handle token verification error
-    console.error('Token verification error:', error);
-    return null;
-  }
-}
-
-// Generate JWT token
-function generateToken(user) {
-  return jwt.sign({ userId: user.userId, name: user.name, email: user.email }, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '1h' });
-}
+// Homepage page
+app.get('/homepage', authenticateToken, (req, res) => {
+  const name = req.user.name;
+  res.json({ message: `Welcome, ${name}! This is the homepage.` });
+});
 
 // Error handling middleware
 app.use((err, req, res, next) => {
